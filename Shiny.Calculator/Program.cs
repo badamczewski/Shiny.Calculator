@@ -3,6 +3,7 @@ using Shiny.Calculator.Evaluation;
 using Shiny.Repl.Parsing;
 using Shiny.Repl.Tokenization;
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
@@ -15,7 +16,9 @@ namespace Shiny.Repl
         private static string[] commands = new string[] { "cls", "explain", "help?" };
 
         static void Main(string[] args)
-        {   
+        {
+            Console.WriteLine(PrintLogo());
+
             var prompt = ">>> ";
 
             while (true)
@@ -188,6 +191,16 @@ namespace Shiny.Repl
 
             var result = evaluator.Evaluate(ast, variables, printer);
             return result;
+        }
+
+        private static string PrintLogo()
+        {
+            return @"
+  ___ _    _             ___      _         _      _           
+ / __| |_ (_)_ _ _  _   / __|__ _| |__ _  _| |__ _| |_ ___ _ _ 
+ \__ \ ' \| | ' \ || | | (__/ _` | / _| || | / _` |  _/ _ \ '_|
+ |___/_||_|_|_||_\_, |  \___\__,_|_\__|\_,_|_\__,_|\__\___/_|  
+                 |__/                                          ";
         }
     }
 }
