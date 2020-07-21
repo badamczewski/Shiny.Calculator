@@ -40,6 +40,14 @@ namespace Shiny.Calculator.Evaluation
                 variables.TryAdd(identifierExpression.Identifier, new EvaluatorState());
                 return;
             }
+            else if (expression is CommandExpression commandExpression)
+            {
+                if (commandExpression.RightHandSide != null)
+                {
+                    Visit(commandExpression.RightHandSide);
+                }
+                return;
+            }
 
             throw new ArgumentException($"Invalid Expression: '{expression.ToString()}'");
         }

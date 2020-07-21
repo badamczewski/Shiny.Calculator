@@ -12,11 +12,13 @@ namespace Shiny.Repl
     {
         private static char[] operators = new char[] { '+', '-', '/', '*', '^', '~', '|', '&' };
         static void Main(string[] args)
-        {
+        {   
+            var prompt = ">>> ";
+
             while (true)
             {
-                var statement = ProcessKeyEvents("Shiny> ");
-                Evaluate(statement);
+                var statement = ProcessKeyEvents(prompt);
+                Evaluate(statement, prompt);
             }
         }
 
@@ -114,34 +116,36 @@ namespace Shiny.Repl
             return statementBuilder.ToString();
         }
 
-        private static EvaluatorState Evaluate(string statement)
+        private static EvaluatorState Evaluate(string statement, string prompt)
         {
             Tokenizer tokenizer = new Tokenizer();
             Parser parser = new Parser();
             Evaluator evaluator = new Evaluator();
             VariableResolver resolver = new VariableResolver();
-            BitPrinter printer = new BitPrinter();
+            ConsolePrinter printer = new ConsolePrinter();
 
             var tokens = tokenizer.Tokenize(statement);
             var ast = parser.Parse(tokens);
+
             Console.WriteLine();
 
             var variables = resolver.Resolve(ast);
 
             foreach (var resolved in variables)
             {
-                var stmt = ProcessKeyEvents($"{resolved.Key} = ");
-                var value = Evaluate(stmt);
+                var nestedPrompt = $"{resolved.Key} = ";
+
+                var stmt = ProcessKeyEvents(nestedPrompt);
+                var value = Evaluate(stmt, nestedPrompt);
 
                 var existing = variables[resolved.Key];
+
                 existing.IsSigned = value.IsSigned;
                 existing.Type = value.Type;
                 existing.Value = value.Value;
             }
 
             var result = evaluator.Evaluate(ast, variables, printer);
-            printer.PrintEquals(result);
-
             return result;
         }
     }

@@ -13,15 +13,25 @@ namespace Shiny.Calculator.Evaluation
     public class Evaluator
     {
         private Dictionary<string, EvaluatorState> variables = null;
+        private bool IsExplain = false;
+
         private IPrinter printer;
         public EvaluatorState Evaluate(
             Expression expression,
             Dictionary<string, EvaluatorState> resolvedVariables,
-            IPrinter printer)
+            IPrinter printer, bool explain = false)
         {
+            this.IsExplain = explain;
             this.printer = printer;
             variables = resolvedVariables;
-            return Visit(expression);
+            var result = Visit(expression);
+
+            if (result.Value != null)
+            {
+                PrintAsBitSet((int)long.Parse(result.Value));
+            }
+
+            return result;
         }
 
         private EvaluatorState Visit(Expression expression)
@@ -41,6 +51,20 @@ namespace Shiny.Calculator.Evaluation
             else if (expression is IdentifierExpression identifierExpression)
             {
                 return variables[identifierExpression.Identifier];
+            }
+            else if(expression is CommandExpression commandExpression)
+            {
+                if (commandExpression.CommandName == "explain")
+                {
+                    IsExplain = true;
+                }
+                else if (commandExpression.CommandName == "cls")
+                {
+                    printer.Clear();
+                    return new EvaluatorState();
+                }
+
+                return Visit(commandExpression.RightHandSide);
             }
 
             throw new ArgumentException($"Invalid Expression: '{expression.ToString()}'");
@@ -63,7 +87,10 @@ namespace Shiny.Calculator.Evaluation
 
             var result = EvalUnaryAsNumber(@operator, lhs);
 
-            printer.PrintUnary(unaryExpression, lhs);
+            if (IsExplain)
+            {
+                PrintAsBitSet((int)long.Parse(lhs.Value));
+            }
 
             return new EvaluatorState() { IsSigned = true, Type = lhs.Type, Value = result.ToString() };
         }
@@ -74,7 +101,12 @@ namespace Shiny.Calculator.Evaluation
             var lhs = Visit(operatorExpression.Left);
             var rhs = Visit(operatorExpression.Right);
 
-            printer.PrintBinary(operatorExpression, lhs, rhs);
+            if (IsExplain)
+            {
+                PrintAsBitSet((int)long.Parse(lhs.Value));
+                printer.Print(new Run() { Text = "  " + operatorExpression.Operator, Color = RunColor.Red });
+                PrintAsBitSet((int)long.Parse(rhs.Value));
+            }
 
             var result = EvalBinaryAsNumber(@operator, lhs, rhs);
 
@@ -95,6 +127,8 @@ namespace Shiny.Calculator.Evaluation
                 case "|": return (long.Parse(lhs.Value) | long.Parse(rhs.Value));
                 case "^": return (long.Parse(lhs.Value) ^ long.Parse(rhs.Value));
                 case "%": return (long.Parse(lhs.Value) % long.Parse(rhs.Value));
+                case ">>": return (long.Parse(lhs.Value) >> int.Parse(rhs.Value));
+                case "<<": return (long.Parse(lhs.Value) << int.Parse(rhs.Value));
             }
 
             throw new ArgumentException("Invalid Operator");
@@ -108,6 +142,48 @@ namespace Shiny.Calculator.Evaluation
             }
 
             throw new ArgumentException("Invalid Operator");
+        }
+
+        private void PrintAsBitSet(int value)
+        {
+            int maxOffset = 5;
+            var val = value.ToString();
+            string pad = " ";
+            int len = val.Length;
+
+            if (value >= 0)
+            {
+                pad += " ";
+            }
+            else
+            {
+                len--;
+            }
+
+            List<Run> runs = new List<Run>();
+
+            string valueToPrint = pad + value.ToString() + new string(' ', Math.Abs(maxOffset - len)) + " => ";
+            runs.Add(new Run() { Text = valueToPrint, Color = (RunColor)(int)Console.ForegroundColor });
+
+            for (int b = 31; b >= 0; b--)
+            {
+                var isSet = (value & (1 << (b % 32))) != 0;
+                if (isSet)
+                {
+                    runs.Add(new Run() { Text = "1", Color = RunColor.Green });
+                }
+                else
+                {
+                    runs.Add(new Run() { Text = "0", Color = RunColor.Blue });
+                }
+
+                if (b > 0 && b % 8 == 0)
+                {
+                    runs.Add(new Run() { Text = "_", Color = RunColor.White });
+                }
+            }
+
+            printer.Print(runs.ToArray());
         }
     }
 }

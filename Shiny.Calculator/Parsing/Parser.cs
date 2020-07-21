@@ -13,16 +13,93 @@ namespace Shiny.Repl.Parsing
         {
             this.tokens = tokens;
             int i = 0;
-            return ParseBinaryExpression(ref i, 0);
+            return ParseStatement(ref i);
         }
 
-        public Expression ParseBinaryExpression(ref int i, int level)
+        public Expression ParseStatement(ref int i)
+        {
+            if(IsCommand(i))
+            {
+                return ParseCommand(ref i);
+            }
+            else
+            {
+                return ParseBinaryExpression(ref i, 0);
+            }
+        }
+
+        private CommandExpression ParseCommand(ref int i)
+        {
+            var token = tokens[i];
+            Move(ref i);
+            var rhs = ParseBinaryExpression(ref i, 0);
+
+            return new CommandExpression() { CommandName = token.GetValue(), RightHandSide = rhs };
+        }
+
+        #region How_Binary_Expression_Parser_Works
+        //
+        // The binary expression parser uses a form of a Recursive Decent Parser to handle Operator-precedence
+        // our function to parse expression has a level variable that determines if we should
+        // parse recursivley and build a nested tree down or if we should exit 
+        // (bc we have an operator with a higher level then we do)
+        // 
+        // This is a very simple and roboust solution as compared to the Shift Reducre Techniques with minimal
+        // to almost no performance drawbacks.
+        //
+        // See for yourself:
+        // (this example is not a 1-to-1 implementation but it's the core idea how we do things)
+        //
+        // 2 * 3 * 4 * 5 + 6 * 7 + 8
+        // parse_expression(-100)
+        //   2
+        //   * (100)
+        //   100 > -100 TRUE
+        //   parse_expression(100)
+        //     3
+        //     * (100)
+        //     100 > 100 TRUE
+        //     parse_expression(100)
+        //       4
+        //       * (100)
+        //       100 > 100 TRUE
+        //       parse_expression(100)
+        //         5
+        //         + (50)
+        //         50 > 100 FALSE
+        //         return 5;
+        //       exp = (l= 4 * r = 5)
+        //     exp = (l = 3 * r = exp(4 * 5))   
+        //   exp = (l = 2 * exp(3 * 4 * 5))
+        //   + (50) 
+        //   50 > -100 TRUE  
+        //   parse_expression(50)
+        //     6
+        //     * (100)
+        //     100 > 50 TRUE
+        //     parse_expression(100)
+        //       7
+        //       + (50)
+        //       50 > 100 FALSE
+        //       return 7;
+        //     exp = (l = 6 * r = 7)
+        //   exp = (l = prev_exp, r = exp(6 * 7)
+        //   + (50)
+        //   50 >= -100 TRUE
+        //   parse_expression(50)
+        //     8
+        //     EOF
+        //     return 8;
+        //   exp = (l = prev_exp, r = 8)
+        //
+        #endregion
+        private Expression ParseBinaryExpression(ref int i, int level)
         {
             Expression left = null;
 
             for (; i < tokens.Count; i++)
             {
-                var token = tokens[i];
+                 var token = tokens[i];
 
                 //
                 // Check if we're dealing with Unary Expression: (-1 -2 etc)
@@ -44,6 +121,7 @@ namespace Shiny.Repl.Parsing
                 {
                     UnaryExpression unary = new UnaryExpression();
                     unary.Operator = token.GetValue();
+
                     Move(ref i);
                     Move(ref i);
 
@@ -275,6 +353,22 @@ namespace Shiny.Repl.Parsing
             return IsNumber(tokenIndex) || IsText(tokenIndex) || IsWord(tokenIndex) || IsBool(tokenIndex);
         }
 
+        private bool IsCommand(int tokenIndex)
+        {
+            if (tokenIndex < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+                var value = token.GetValue();
+
+                if (token.TokenName == "Word" && (value == "explain" || value == "cls"))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private bool IsWord(int tokenIndex)
         {
             if (tokenIndex < tokens.Count)
@@ -380,6 +474,12 @@ namespace Shiny.Repl.Parsing
         {
             Console.WriteLine($"LIT-{Name} = {Value}");
         }
+    }
+
+    public class CommandExpression : Expression
+    {
+        public string CommandName { get; set; }
+        public Expression RightHandSide { get; set; }
     }
 
     public class IdentifierExpression : Expression
