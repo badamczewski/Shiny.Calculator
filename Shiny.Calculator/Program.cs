@@ -1,4 +1,5 @@
-﻿using Shiny.Calculator.Evaluation;
+﻿using Shiny.Calculator;
+using Shiny.Calculator.Evaluation;
 using Shiny.Repl.Parsing;
 using Shiny.Repl.Tokenization;
 using System;
@@ -10,7 +11,9 @@ namespace Shiny.Repl
 {
     class Program
     {
-        private static char[] operators = new char[] { '+', '-', '/', '*', '^', '~', '|', '&' };
+        private static char[] operators = new char[] { '+', '-', '/', '*', '^', '~', '|', '&', '>', '<' };
+        private static string[] commands = new string[] { "cls", "explain", "help?" };
+
         static void Main(string[] args)
         {   
             var prompt = ">>> ";
@@ -110,10 +113,46 @@ namespace Shiny.Repl
                     }
 
                     bufferIndex++;
+
+                    foreach (var command in commands)
+                    {
+                        var clsIdx = IndexOf(statementBuilder, command);
+
+                        if (clsIdx >= 0 && bufferIndex <= clsIdx + command.Length)
+                        {
+                            Console.SetCursorPosition(prompt.Length + clsIdx, Console.CursorTop);
+                            ConsoleUtils.Write(ConsoleColor.Blue, command);
+                        }
+                    }
+
                 }
             }
 
             return statementBuilder.ToString();
+        }
+
+        private static int IndexOf(StringBuilder stringBuilder, string value)
+        {
+            int matched = 0;
+            int foundIdx = 0;
+            for (int i = 0; i < stringBuilder.Length; i++)
+            {
+                if (stringBuilder[i] == value[matched])
+                {
+                    matched++;
+                    if (matched >= value.Length)
+                    {
+                        return foundIdx;
+                    }
+                }
+                else
+                {
+                    foundIdx = i;
+                    matched = 0;
+                }
+            }
+
+            return -1;
         }
 
         private static EvaluatorState Evaluate(string statement, string prompt)
@@ -137,6 +176,8 @@ namespace Shiny.Repl
 
                 var stmt = ProcessKeyEvents(nestedPrompt);
                 var value = Evaluate(stmt, nestedPrompt);
+
+                printer.Print(new Run() { Text = "  --------", Color = RunColor.White });
 
                 var existing = variables[resolved.Key];
 

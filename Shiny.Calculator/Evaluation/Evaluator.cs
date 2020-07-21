@@ -28,6 +28,7 @@ namespace Shiny.Calculator.Evaluation
 
             if (result.Value != null)
             {
+                printer.Print(new Run() { Text = "  =", Color = RunColor.Red });
                 PrintAsBitSet((int)long.Parse(result.Value));
             }
 
