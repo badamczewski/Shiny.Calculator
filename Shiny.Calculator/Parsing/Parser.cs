@@ -1,6 +1,7 @@
 ﻿using Shiny.Repl.Tokenization;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace Shiny.Repl.Parsing
@@ -8,6 +9,12 @@ namespace Shiny.Repl.Parsing
     public class Parser
     {
         private List<Token> tokens;
+        private string[] commands;
+
+        public Parser(string[] commands)
+        {
+            this.commands = commands;
+        }
 
         public Expression Parse(List<Token> tokens)
         {
@@ -360,7 +367,7 @@ namespace Shiny.Repl.Parsing
                 var token = tokens[tokenIndex];
                 var value = token.GetValue();
 
-                if (token.TokenName == "Word" && (value == "explain" || value == "cls"))
+                if (token.TokenName == "Word" && commands.Contains(value))
                 {
                     return true;
                 }

@@ -1,4 +1,4 @@
-﻿using Shiny.Calculator;
+using Shiny.Calculator;
 using Shiny.Calculator.Evaluation;
 using Shiny.Repl.Parsing;
 using Shiny.Repl.Tokenization;
@@ -10,20 +10,31 @@ using System.Text;
 
 namespace Shiny.Repl
 {
+
+
     class Program
     {
         private static char[] operators = new char[] { '+', '-', '/', '*', '^', '~', '|', '&', '>', '<' };
-        private static string[] commands = new string[] { "cls", "explain", "help?" };
+        private static string[] commands = new string[] { "cls", "explain", "explain_on", "explain_off", "help?" };
+        private static string[] history = new string[64];
+        private static int historyIndex = 0;
+        private static string prompt = ">>> ";
+
+
+        private static  EvaluatorContext context = new EvaluatorContext();
+        private static  Tokenizer tokenizer = new Tokenizer();
+        private static  Parser parser = new Parser(commands);
+        private static  Evaluator evaluator = new Evaluator();
+        private static  ConsolePrinter printer = new ConsolePrinter();
 
         static void Main(string[] args)
         {
             Console.WriteLine(PrintLogo());
 
-            var prompt = ">>> ";
-
             while (true)
             {
                 var statement = ProcessKeyEvents(prompt);
+                history[historyIndex++ % history.Length] = statement;
                 Evaluate(statement, prompt);
             }
         }
@@ -37,6 +48,7 @@ namespace Shiny.Repl
 
             var keyInfo = new ConsoleKeyInfo();
             int bufferIndex = 0;
+            int baseIndex = prompt.Length;
 
             while (keyInfo.Key != ConsoleKey.Enter)
             {
@@ -54,11 +66,40 @@ namespace Shiny.Repl
                     }
                     else
                     {
-                        statementBuilder.Insert(bufferIndex, keyInfo.KeyChar);
+                        InsertBetween(statementBuilder, keyInfo.KeyChar, bufferIndex);
                     }
 
                     bufferIndex++;
 
+                }
+                else if (keyInfo.Key == ConsoleKey.UpArrow)
+                {
+                    if (historyIndex > 0) historyIndex--;
+                    var historyStatement = history[historyIndex];
+
+                    Console.SetCursorPosition(baseIndex, Console.CursorTop);
+                    Console.Write(new string(' ', statementBuilder.Length));
+                    Console.SetCursorPosition(baseIndex, Console.CursorTop);
+
+                    Console.Write(historyStatement);
+                    statementBuilder.Clear();
+                    statementBuilder.Append(historyStatement);
+                    bufferIndex = statementBuilder.Length;
+
+                }
+                else if (keyInfo.Key == ConsoleKey.DownArrow)
+                {
+                    if (historyIndex < history.Length) historyIndex++;
+                    var historyStatement = history[historyIndex & history.Length];
+
+                    Console.SetCursorPosition(baseIndex, Console.CursorTop);
+                    Console.Write(new string(' ', statementBuilder.Length));
+                    Console.SetCursorPosition(baseIndex, Console.CursorTop);
+
+                    Console.Write(historyStatement);
+                    statementBuilder.Clear();
+                    statementBuilder.Append(historyStatement);
+                    bufferIndex = statementBuilder.Length;
                 }
                 else if (keyInfo.Key == ConsoleKey.LeftArrow)
                 {
@@ -82,17 +123,17 @@ namespace Shiny.Repl
                     if (bufferIndex == 0)
                         continue;
 
-                    Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
-                    Console.Write(" ");
-                    Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
-
                     if (bufferIndex >= statementBuilder.Length)
                     {
+                        Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
+                        Console.Write(" ");
+                        Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
+
                         statementBuilder.Remove(statementBuilder.Length - 1, 1);
                     }
                     else
                     {
-                        statementBuilder.Remove(bufferIndex - 1, 1);
+                        RemoveBetween(statementBuilder, keyInfo.KeyChar, bufferIndex);
                     }
 
                     bufferIndex--;
@@ -112,7 +153,7 @@ namespace Shiny.Repl
                     }
                     else
                     {
-                        statementBuilder.Insert(bufferIndex, keyInfo.KeyChar);
+                        InsertBetween(statementBuilder, keyInfo.KeyChar, bufferIndex);
                     }
 
                     bufferIndex++;
@@ -132,6 +173,38 @@ namespace Shiny.Repl
             }
 
             return statementBuilder.ToString();
+        }
+
+        private static void RemoveBetween(StringBuilder statementBuilder, char key, int bufferIndex)
+        {
+            var all = statementBuilder.ToString();
+            var lhs = all.Substring(0, bufferIndex - 1);
+            var rhs = all.Substring(bufferIndex);
+
+            statementBuilder.Clear();
+            statementBuilder.Append(lhs);
+            statementBuilder.Append(rhs);
+
+            Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
+            Console.Write(rhs + " ");
+            Console.SetCursorPosition(prompt.Length + bufferIndex - 1, Console.CursorTop);
+        }
+
+        private static void InsertBetween(StringBuilder statementBuilder, char key, int bufferIndex)
+        {
+            //
+            // Let's move all of the right hand characters.
+            //
+            var all = statementBuilder.ToString();
+            var lhs = all.Substring(0, bufferIndex);
+            var rhs = key + all.Substring(bufferIndex);
+
+            statementBuilder.Clear();
+            statementBuilder.Append(lhs);
+            statementBuilder.Append(rhs);
+
+            Console.Write(all.Substring(bufferIndex));
+            Console.SetCursorPosition(prompt.Length + bufferIndex + 1, Console.CursorTop);
         }
 
         private static int IndexOf(StringBuilder stringBuilder, string value)
@@ -159,17 +232,18 @@ namespace Shiny.Repl
         }
 
         private static EvaluatorState Evaluate(string statement, string prompt)
-        {
-            Tokenizer tokenizer = new Tokenizer();
-            Parser parser = new Parser();
-            Evaluator evaluator = new Evaluator();
+        {            
+            Console.WriteLine();
+
+            if (string.IsNullOrWhiteSpace(statement))
+            {
+                return null;
+            }
+
             VariableResolver resolver = new VariableResolver();
-            ConsolePrinter printer = new ConsolePrinter();
 
             var tokens = tokenizer.Tokenize(statement);
             var ast = parser.Parse(tokens);
-
-            Console.WriteLine();
 
             var variables = resolver.Resolve(ast);
 
@@ -189,8 +263,9 @@ namespace Shiny.Repl
                 existing.Value = value.Value;
             }
 
-            var result = evaluator.Evaluate(ast, variables, printer);
+            var result = evaluator.Evaluate(ast, variables, printer, context);
             return result;
+
         }
 
         private static string PrintLogo()

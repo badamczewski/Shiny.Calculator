@@ -10,21 +10,29 @@ using UnaryExpression = Shiny.Repl.Parsing.UnaryExpression;
 
 namespace Shiny.Calculator.Evaluation
 {
+    public class EvaluatorContext
+    {
+        public bool IsExplainAll;
+        public bool IsExplain;
+    }
+
     public class Evaluator
     {
         private Dictionary<string, EvaluatorState> variables = null;
-        private bool IsExplain = false;
+        public EvaluatorContext context;
 
         private IPrinter printer;
         public EvaluatorState Evaluate(
             Expression expression,
             Dictionary<string, EvaluatorState> resolvedVariables,
-            IPrinter printer, bool explain = false)
+            IPrinter printer, EvaluatorContext context)
         {
-            this.IsExplain = explain;
+            this.context = context;
             this.printer = printer;
             variables = resolvedVariables;
             var result = Visit(expression);
+
+            if (context.IsExplainAll) context.IsExplain = true;
 
             if (result.Value != null)
             {
@@ -57,7 +65,17 @@ namespace Shiny.Calculator.Evaluation
             {
                 if (commandExpression.CommandName == "explain")
                 {
-                    IsExplain = true;
+                    context.IsExplain = true;
+                }
+                else if (commandExpression.CommandName == "explain_on")
+                {
+                    context.IsExplainAll = true;
+                    return new EvaluatorState();
+                }
+                else if (commandExpression.CommandName == "explain_off")
+                {
+                    context.IsExplainAll = false;
+                    return new EvaluatorState();
                 }
                 else if (commandExpression.CommandName == "cls")
                 {
@@ -88,7 +106,7 @@ namespace Shiny.Calculator.Evaluation
 
             var result = EvalUnaryAsNumber(@operator, lhs);
 
-            if (IsExplain)
+            if (context.IsExplain)
             {
                 PrintAsBitSet((int)long.Parse(lhs.Value));
             }
@@ -102,7 +120,7 @@ namespace Shiny.Calculator.Evaluation
             var lhs = Visit(operatorExpression.Left);
             var rhs = Visit(operatorExpression.Right);
 
-            if (IsExplain)
+            if (context.IsExplain)
             {
                 PrintAsBitSet((int)long.Parse(lhs.Value));
                 printer.Print(new Run() { Text = "  " + operatorExpression.Operator, Color = RunColor.Red });
@@ -130,10 +148,28 @@ namespace Shiny.Calculator.Evaluation
                 case "%": return (long.Parse(lhs.Value) % long.Parse(rhs.Value));
                 case ">>": return (long.Parse(lhs.Value) >> int.Parse(rhs.Value));
                 case "<<": return (long.Parse(lhs.Value) << int.Parse(rhs.Value));
+
+                //Logical shift pad with zeros
+                case ">>>": return LogicalShift(long.Parse(lhs.Value), int.Parse(rhs.Value));
             }
 
             throw new ArgumentException("Invalid Operator");
         }
+
+        private long LogicalShift(long lhs, int rhs)
+        {
+            var by = rhs;
+            var value = lhs;
+            var shifted = (value >> by);
+
+            for (int b = by; b > 0; b--)
+            {
+                shifted = (shifted & ~(1 << ((31 - (b - 1)) % 32)));
+            }
+
+            return shifted;
+        }
+
         private long EvalUnaryAsNumber(string op, EvaluatorState lhs)
         {
             switch (op)
