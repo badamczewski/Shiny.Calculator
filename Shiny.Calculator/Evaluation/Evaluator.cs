@@ -3,10 +3,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Shiny.Calculator.Evaluation;
 
 using BinaryExpression = Shiny.Repl.Parsing.BinaryExpression;
-using Expression = Shiny.Repl.Parsing.Expression;
+using AST_Node = Shiny.Repl.Parsing.AST_Node;
 using UnaryExpression = Shiny.Repl.Parsing.UnaryExpression;
+using System.IO;
 
 namespace Shiny.Calculator.Evaluation
 {
@@ -19,11 +21,19 @@ namespace Shiny.Calculator.Evaluation
     public class Evaluator
     {
         private Dictionary<string, EvaluatorState> variables = null;
-        public EvaluatorContext context;
+        private Dictionary<string, EvaluatorState> registers = new Dictionary<string, EvaluatorState>() 
+        {
+            { "eax", new EvaluatorState() { Value = "0", Type = LiteralType.Number } },
+            { "ebx", new EvaluatorState() { Value = "0", Type = LiteralType.Number } },
+            { "ecx", new EvaluatorState() { Value = "0", Type = LiteralType.Number } },
+            { "edx", new EvaluatorState() { Value = "0", Type = LiteralType.Number } }
+        };
 
+        public EvaluatorContext context;
         private IPrinter printer;
+
         public EvaluatorState Evaluate(
-            Expression expression,
+            AST_Node expression,
             Dictionary<string, EvaluatorState> resolvedVariables,
             IPrinter printer, EvaluatorContext context)
         {
@@ -36,14 +46,14 @@ namespace Shiny.Calculator.Evaluation
 
             if (result.Value != null)
             {
-                printer.Print(new Run() { Text = "  =", Color = RunColor.Red });
+                printer.Print(new Run() { Text = "    =", Color = RunColor.Red });
                 PrintAsBitSet((int)long.Parse(result.Value));
             }
 
             return result;
         }
 
-        private EvaluatorState Visit(Expression expression)
+        private EvaluatorState Visit(AST_Node expression)
         {
             if (expression is BinaryExpression operatorExpression)
             {
@@ -61,25 +71,68 @@ namespace Shiny.Calculator.Evaluation
             {
                 return variables[identifierExpression.Identifier];
             }
+            else if(expression is ASM_Instruction assemblyInstruction)
+            {
+                return EvaluateAssemblyInstruction(assemblyInstruction);
+            }
             else if(expression is CommandExpression commandExpression)
             {
                 if (commandExpression.CommandName == "explain")
                 {
+                    printer.Print(Run.White("Explain is ON"));
+
                     context.IsExplain = true;
+                    return new EvaluatorState();
                 }
                 else if (commandExpression.CommandName == "explain_on")
                 {
+                    printer.Print(Run.White("Explain is ON"));
+
                     context.IsExplainAll = true;
                     return new EvaluatorState();
                 }
                 else if (commandExpression.CommandName == "explain_off")
                 {
+                    printer.Print(Run.White("Explain is OFF"));
+
                     context.IsExplainAll = false;
+                    context.IsExplain = false;
+
                     return new EvaluatorState();
                 }
                 else if (commandExpression.CommandName == "cls")
                 {
                     printer.Clear();
+                    return new EvaluatorState();
+                }
+                else if(commandExpression.CommandName == "code")
+                {
+                    //
+                    // Should be file path;
+                    //
+                    var path = commandExpression.RightHandSide.ToString();
+                    printer.Clear();
+
+                    PrintCode(path.Replace("\"",string.Empty));
+
+                    return new EvaluatorState();
+                }
+                else if(commandExpression.CommandName == "parse")
+                {
+                    var rhs = commandExpression.RightHandSide;
+                    ASTPrinter ast = new ASTPrinter(printer);
+                    ast.Print(rhs);
+
+                    return new EvaluatorState();
+                }
+                else if (commandExpression.CommandName == "regs")
+                {
+                    foreach(var register in registers)
+                    {
+                        printer.PrintInline(Run.White("    " + register.Key + " :"));
+                        PrintAsBitSet((int)long.Parse(register.Value.Value));
+                    }
+
                     return new EvaluatorState();
                 }
 
@@ -89,6 +142,241 @@ namespace Shiny.Calculator.Evaluation
             throw new ArgumentException($"Invalid Expression: '{expression.ToString()}'");
         }
 
+        private EvaluatorState EvaluateAssemblyInstruction(ASM_Instruction assemblyInstruction)
+        {
+            if(assemblyInstruction is BinaryASMInstruction binaryAsm)
+            {
+                if(binaryAsm.Name == "mov")
+                {
+                    EvaluateAsmMov(binaryAsm);
+                }
+                else if(binaryAsm.Name == "add")
+                {
+                    EvaluateAsmAdd(binaryAsm);
+                }
+                else if (binaryAsm.Name == "sum")
+                {
+                    EvaluateAsmAdd(binaryAsm);
+                }
+                else if (binaryAsm.Name == "shr")
+                {
+                    EvaluateAsmShr(binaryAsm);
+                }
+                else if (binaryAsm.Name == "shl")
+                {
+                    EvaluateAsmShl(binaryAsm);
+                }
+            }
+            else if(assemblyInstruction is UnaryASMInstruction unaryASM)
+            {
+                if (unaryASM.Name == "mul")
+                {
+                    EvaluateAsmMul(unaryASM);
+                }
+                else if (unaryASM.Name == "div")
+                {
+                    EvaluateAsmDiv(unaryASM);
+                }
+            }
+
+            return new EvaluatorState();
+        }
+
+        private void EvaluateAsmMov(BinaryASMInstruction mov)
+        {
+            EvaluatorState state = null;
+            if (mov.Source is LiteralExpression literal)
+            {
+                state = EvaluateLiteralExpression(literal);
+            }
+            else if (mov.Source is IdentifierExpression identifier)
+            {
+                state = registers[identifier.Identifier];
+            }
+
+            if (mov.Desination is IdentifierExpression identifierDest)
+            {
+                registers[identifierDest.Identifier] = state;
+
+                if (context.IsExplain)
+                {
+                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
+                    PrintAsBitSet((int)long.Parse(state.Value));
+                }
+            }
+        }
+
+        private void EvaluateAsmAdd(BinaryASMInstruction add)
+        {
+            EvaluatorState sourceState = null;
+            if (add.Source is LiteralExpression literal)
+            {
+                sourceState = EvaluateLiteralExpression(literal);
+            }
+            else if (add.Source is IdentifierExpression identifier)
+            {
+                sourceState = registers[identifier.Identifier];
+            }
+
+            if (add.Desination is IdentifierExpression identifierDest)
+            {
+                var destState = registers[identifierDest.Identifier];
+                var result = (long.Parse(sourceState.Value) + long.Parse(destState.Value));
+
+                destState.Value = result.ToString();
+                registers[identifierDest.Identifier] = destState;
+
+                if (context.IsExplain)
+                {
+                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
+                    PrintAsBitSet((int)long.Parse(destState.Value));
+                }
+            }
+        }
+
+        private void EvaluateAsmSub(BinaryASMInstruction sub)
+        {
+            EvaluatorState sourceState = null;
+            if (sub.Source is LiteralExpression literal)
+            {
+                sourceState = EvaluateLiteralExpression(literal);
+            }
+            else if (sub.Source is IdentifierExpression identifier)
+            {
+                sourceState = registers[identifier.Identifier];
+            }
+
+            if (sub.Desination is IdentifierExpression identifierDest)
+            {
+                var destState = registers[identifierDest.Identifier];
+                var result = (long.Parse(sourceState.Value) - long.Parse(destState.Value));
+
+                destState.Value = result.ToString();
+                registers[identifierDest.Identifier] = destState;
+
+                if (context.IsExplain)
+                {
+                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
+                    PrintAsBitSet((int)long.Parse(destState.Value));
+                }
+            }
+        }
+
+        private void EvaluateAsmShr(BinaryASMInstruction shr)
+        {
+            EvaluatorState sourceState = null;
+            if (shr.Source is LiteralExpression literal)
+            {
+                sourceState = EvaluateLiteralExpression(literal);
+            }
+            else if (shr.Source is IdentifierExpression identifier)
+            {
+                sourceState = registers[identifier.Identifier];
+            }
+
+            if (shr.Desination is IdentifierExpression identifierDest)
+            {
+                var destState = registers[identifierDest.Identifier];
+                var result = (int.Parse(sourceState.Value) >> int.Parse(destState.Value));
+
+                destState.Value = result.ToString();
+                registers[identifierDest.Identifier] = destState;
+
+                if (context.IsExplain)
+                {
+                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
+                    PrintAsBitSet((int)long.Parse(destState.Value));
+                }
+            }
+        }
+
+        private void EvaluateAsmMul(UnaryASMInstruction mul)
+        {
+            EvaluatorState sourceState = null;
+            if (mul.Source is LiteralExpression literal)
+            {
+                sourceState = EvaluateLiteralExpression(literal);
+            }
+            else if (mul.Source is IdentifierExpression identifier)
+            {
+                sourceState = registers[identifier.Identifier];
+            }
+
+            var destState = registers["eax"];
+            var result = (long.Parse(destState.Value) * long.Parse(sourceState.Value));
+
+            destState.Value = result.ToString();
+            registers["eax"] = destState;
+
+            if (context.IsExplain)
+            {
+                printer.Print(new Run() { Text = "    " + "eax", Color = RunColor.White });
+                PrintAsBitSet((int)long.Parse(destState.Value));
+            }
+
+        }
+
+        private void EvaluateAsmDiv(UnaryASMInstruction div)
+        {
+            EvaluatorState sourceState = null;
+            if (div.Source is LiteralExpression literal)
+            {
+                sourceState = EvaluateLiteralExpression(literal);
+            }
+            else if (div.Source is IdentifierExpression identifier)
+            {
+                sourceState = registers[identifier.Identifier];
+            }
+
+            var destState = registers["eax"];
+            var result = (long.Parse(destState.Value) / long.Parse(sourceState.Value));
+
+            destState.Value = result.ToString();
+            registers["eax"] = destState;
+
+            if (context.IsExplain)
+            {
+                printer.Print(new Run() { Text = "    " + "eax", Color = RunColor.White });
+                PrintAsBitSet((int)long.Parse(destState.Value));
+            }
+
+        }
+
+        private void EvaluateAsmShl(BinaryASMInstruction shl)
+        {
+            EvaluatorState sourceState = null;
+            if (shl.Source is LiteralExpression literal)
+            {
+                sourceState = EvaluateLiteralExpression(literal);
+            }
+            else if (shl.Source is IdentifierExpression identifier)
+            {
+                sourceState = registers[identifier.Identifier];
+            }
+
+            if (shl.Desination is IdentifierExpression identifierDest)
+            {
+                var destState = registers[identifierDest.Identifier];
+                var result = (int.Parse(sourceState.Value) << int.Parse(destState.Value));
+
+                destState.Value = result.ToString();
+                registers[identifierDest.Identifier] = destState;
+
+                if (context.IsExplain)
+                {
+                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
+                    PrintAsBitSet((int)long.Parse(destState.Value));
+                }
+            }
+        }
+
+ 
+        private void PrintCode(string path)
+        {
+            var source = File.ReadAllText(path);
+            new Shiny.Calculator.Evaluation.CodeColorizer(printer).Colorize(source);
+        }
+    
         private EvaluatorState EvaluateLiteralExpression(LiteralExpression literalExpression)
         {
             return new EvaluatorState() 
@@ -123,8 +411,9 @@ namespace Shiny.Calculator.Evaluation
             if (context.IsExplain)
             {
                 PrintAsBitSet((int)long.Parse(lhs.Value));
-                printer.Print(new Run() { Text = "  " + operatorExpression.Operator, Color = RunColor.Red });
+                printer.Print(new Run() { Text = "    " + operatorExpression.Operator, Color = RunColor.Red });
                 PrintAsBitSet((int)long.Parse(rhs.Value));
+                printer.Print(new Run() { Text = "    " + "````````", Color = RunColor.White });
             }
 
             var result = EvalBinaryAsNumber(@operator, lhs, rhs);
@@ -185,7 +474,7 @@ namespace Shiny.Calculator.Evaluation
         {
             int maxOffset = 5;
             var val = value.ToString();
-            string pad = " ";
+            string pad = "   ";
             int len = val.Length;
 
             if (value >= 0)

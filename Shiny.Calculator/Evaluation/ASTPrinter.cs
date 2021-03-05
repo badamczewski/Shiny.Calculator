@@ -3,20 +3,20 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-using BinaryExpression = Shiny.Repl.Parsing.BinaryExpression;
-using AST_Node = Shiny.Repl.Parsing.AST_Node;
-using UnaryExpression = Shiny.Repl.Parsing.UnaryExpression;
-
 namespace Shiny.Calculator.Evaluation
 {
-    public class VariableResolver
+    public class ASTPrinter
     {
-        private Dictionary<string, EvaluatorState> variables = new Dictionary<string, EvaluatorState>();
-        public Dictionary<string, EvaluatorState> Resolve(AST_Node expression)
+        private IPrinter _printer;
+
+        public ASTPrinter(IPrinter printer)
         {
-            variables.Clear();
+            _printer = printer;
+        }
+
+        public void Print(AST_Node expression)
+        {
             Visit(expression);
-            return variables;
         }
 
         private void Visit(AST_Node expression)
@@ -38,14 +38,10 @@ namespace Shiny.Calculator.Evaluation
             }
             else if (expression is IdentifierExpression identifierExpression)
             {
-                variables.TryAdd(identifierExpression.Identifier, new EvaluatorState());
+                EvaluateIdentifierExpression(identifierExpression);
                 return;
             }
             else if (expression is CommandExpression commandExpression)
-            {
-                return;
-            }
-            else if (expression is ASM_Instruction asm)
             {
                 return;
             }
@@ -53,20 +49,54 @@ namespace Shiny.Calculator.Evaluation
             throw new ArgumentException($"Invalid Expression: '{expression.ToString()}'");
         }
 
+        private EvaluatorState EvaluateIdentifierExpression(IdentifierExpression identifierExpression)
+        {
+            _printer.Print(
+                Run.Green($"IDENTIFIER-{identifierExpression.Name} =>"),
+                Run.White($"'{identifierExpression.Identifier}'"));
+
+            return null;
+        }
+
         private EvaluatorState EvaluateLiteralExpression(LiteralExpression literalExpression)
         {
+            _printer.Print(
+                Run.Green($"LITERAL-{literalExpression.Name} =>"),
+                Run.White($"'{literalExpression.Value}'"));
+
             return null;
         }
 
         private void EvaluateUnaryExpression(UnaryExpression unaryExpression)
         {
+            _printer.Print(
+                Run.Green($"UNARY-{unaryExpression.Name} =>"));
+
+            _printer.Indent += 4;
+
+            _printer.Print(
+                Run.Red($"OPERATOR = {unaryExpression.Operator}"));
+
             Visit(unaryExpression.Left);
+
+            _printer.Indent -= 4;
         }
 
         private void EvaluateBinaryExpression(BinaryExpression operatorExpression)
         {
+            _printer.Print(
+                Run.Green($"BINARY-{operatorExpression.Name} =>"));
+
+            
+            _printer.Indent += 4;
+
+            _printer.Print(
+                Run.Red($"OPERATOR = {operatorExpression.Operator}"));
+
             Visit(operatorExpression.Left);
             Visit(operatorExpression.Right);
+
+            _printer.Indent -= 4;
         }
     }
 }

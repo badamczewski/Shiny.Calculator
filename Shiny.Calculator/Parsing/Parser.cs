@@ -10,29 +10,132 @@ namespace Shiny.Repl.Parsing
     {
         private List<Token> tokens;
         private string[] commands;
+        private string[] instructions = new string[] { "mov", "add", "sub", "mul", "div", "shr", "shl" };
+
 
         public Parser(string[] commands)
         {
             this.commands = commands;
         }
 
-        public Expression Parse(List<Token> tokens)
+        public AST_Node Parse(List<Token> tokens)
         {
             this.tokens = tokens;
             int i = 0;
             return ParseStatement(ref i);
         }
 
-        public Expression ParseStatement(ref int i)
+        public AST_Node ParseStatement(ref int i)
         {
-            if(IsCommand(i))
+            if (IsCommand(i))
             {
                 return ParseCommand(ref i);
+            }
+            else if (IsInstruction(i))
+            {
+                return ParseInstruction(ref i);
             }
             else
             {
                 return ParseBinaryExpression(ref i, 0);
             }
+        }
+
+        private bool IsInstruction(int tokenIndex)
+        {
+            if (tokenIndex < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+                var value = token.GetValue();
+
+                if (token.TokenName == "Word" && instructions.Contains(value))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    
+
+        private ASM_Instruction ParseInstruction(ref int i)
+        {
+            var name = tokens[i].GetValue().ToLower();
+
+            Move(ref i);
+
+            if (name == "mov")
+            {
+                return ParseTwoArgInstruction(name, ref i);
+            }
+            else if (name == "add")
+            {
+                return ParseTwoArgInstruction(name, ref i);
+            }
+            else if (name == "sub")
+            {
+                return ParseTwoArgInstruction(name, ref i);
+            }
+            else if (name == "shl")
+            {
+                return ParseTwoArgInstruction(name, ref i);
+            }
+            else if (name == "shr")
+            {
+                return ParseTwoArgInstruction(name, ref i);
+            }
+            else if(name == "mul")
+            {
+                return ParseSingleArgInstruction(name, ref i);
+            }
+            else if (name == "div")
+            {
+                return ParseSingleArgInstruction(name, ref i);
+            }
+
+            throw new ArgumentException("Assembly Instruction Error - Unknown Instruction");
+        }
+
+        private ASM_Instruction ParseSingleArgInstruction(string name, ref int i)
+        {
+            //
+            // INST A
+            //
+            if (IsLiteralsOrVars(i))
+            {
+                var source = ParseLiteralsAndIdentifiers(ref i);
+
+                return new UnaryASMInstruction()
+                {
+                    Name = name,
+                    Source = source
+                };
+            }
+
+            throw new ArgumentException("Assembly Instruction Error - Unknown Instruction");
+        }
+
+        private ASM_Instruction ParseTwoArgInstruction(string name, ref int i)
+        {
+            //
+            // INST A,B
+            //
+            if (IsLiteralsOrVars(i) && IsComma(i + 1) && IsLiteralsOrVars(i + 2))
+            {
+                var dest = ParseLiteralsAndIdentifiers(ref i);
+                Move(ref i);
+                Move(ref i);
+                var source = ParseLiteralsAndIdentifiers(ref i);
+
+                return new BinaryASMInstruction()
+                {
+                    Name = name,
+                    Desination = dest,
+                    Source = source
+                };
+            }
+
+            throw new ArgumentException("Assembly Instruction Error - Unknown Instruction");
         }
 
         private CommandExpression ParseCommand(ref int i)
@@ -100,9 +203,9 @@ namespace Shiny.Repl.Parsing
         //   exp = (l = prev_exp, r = 8)
         //
         #endregion
-        private Expression ParseBinaryExpression(ref int i, int level)
+        private AST_Node ParseBinaryExpression(ref int i, int level)
         {
-            Expression left = null;
+            AST_Node left = null;
 
             for (; i < tokens.Count; i++)
             {
@@ -169,7 +272,7 @@ namespace Shiny.Repl.Parsing
                 {
                     return left;
                 }
-                else if (IsLiteralsAndVars(i))
+                else if (IsLiteralsOrVars(i))
                 {
                     left = ParseLiteralsAndIdentifiers(ref i);
                 }
@@ -178,7 +281,7 @@ namespace Shiny.Repl.Parsing
             return left;
         }
 
-        private Expression ParseLiteralsAndIdentifiers(ref int i)
+        private AST_Node ParseLiteralsAndIdentifiers(ref int i)
         {
             var token = tokens[i];
 
@@ -355,7 +458,7 @@ namespace Shiny.Repl.Parsing
             return false;
         }
 
-        private bool IsLiteralsAndVars(int tokenIndex)
+        private bool IsLiteralsOrVars(int tokenIndex)
         {
             return IsNumber(tokenIndex) || IsText(tokenIndex) || IsWord(tokenIndex) || IsBool(tokenIndex);
         }
@@ -391,6 +494,21 @@ namespace Shiny.Repl.Parsing
             return false;
         }
 
+        private bool IsComma(int tokenIndex)
+        {
+            if (tokenIndex < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+
+                if (token.TokenName == "Separator" && token.GetValue() == ",")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private bool IsNumber(int tokenIndex)
         {
             if (tokenIndex < tokens.Count)
@@ -407,25 +525,33 @@ namespace Shiny.Repl.Parsing
         }
     }
 
-    public class BinaryExpression : Expression
+    public class BinaryExpression : AST_Node
     {
-        public Expression Left { get; set; }
-        public Expression Right { get; set; }
+        public AST_Node Left { get; set; }
+        public AST_Node Right { get; set; }
         public string Operator { get; set; }
 
         public override void Print()
         {
-            Console.WriteLine($"{Left.ToString()} {Operator} {Right.ToString()}");
+            Console.WriteLine($"BINARY-{Name} = {Operator}");
+            Left.Print();
+            Right.Print();
         }
     }
 
-    public class UnaryExpression : Expression
+    public class UnaryExpression : AST_Node
     {
-        public Expression Left { get; set; }
+        public AST_Node Left { get; set; }
         public string Operator { get; set; }
+
+        public override void Print()
+        {
+            Console.WriteLine($"UNARY-{Name} = {Operator}");
+            Left.Print();
+        }
     }
 
-    public class Expression
+    public class AST_Node
     {
         private static int IdGen = 0;
         public int Line { get; set; }
@@ -436,7 +562,7 @@ namespace Shiny.Repl.Parsing
         {
         }
 
-        public Expression()
+        public AST_Node()
         {
             Name = IdGen++.ToString();
         }
@@ -459,7 +585,7 @@ namespace Shiny.Repl.Parsing
         Function
     }
 
-    public class LiteralExpression : Expression
+    public class LiteralExpression : AST_Node
     {
         public LiteralType Type { get; set; }
         public string Value { get; set; }
@@ -474,22 +600,47 @@ namespace Shiny.Repl.Parsing
             }
             else
             {
-                return $"'{Value}'";
+                return $"\"{Value}\"";
             }
         }
+
         public override void Print()
         {
             Console.WriteLine($"LIT-{Name} = {Value}");
         }
     }
 
-    public class CommandExpression : Expression
+    public class CommandExpression : AST_Node
     {
         public string CommandName { get; set; }
-        public Expression RightHandSide { get; set; }
+        public AST_Node RightHandSide { get; set; }
+
+        public override void Print()
+        {
+            RightHandSide.Print();
+        }
     }
 
-    public class IdentifierExpression : Expression
+    public class ASM_Instruction : AST_Node
+    {
+        public override void Print()
+        {
+            Console.WriteLine($"ASM-{Name}");
+        }
+    }
+
+    public class BinaryASMInstruction : ASM_Instruction
+    {
+        public AST_Node Source { get; set; }
+        public AST_Node Desination { get; set; }
+    }
+
+    public class UnaryASMInstruction : ASM_Instruction
+    {
+        public AST_Node Source { get; set; }
+    }
+
+    public class IdentifierExpression : AST_Node
     {
         public LiteralType Type { get; set; }
         public string TypeName { get; set; }
@@ -498,6 +649,11 @@ namespace Shiny.Repl.Parsing
         public override string ToString()
         {
             return $"{Identifier}";
+        }
+
+        public override void Print()
+        {
+            Console.WriteLine($"IDEN-{Name} = {Identifier}");
         }
     }
 }

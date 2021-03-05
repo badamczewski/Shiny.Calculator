@@ -10,16 +10,13 @@ using System.Text;
 
 namespace Shiny.Repl
 {
-
-
     class Program
     {
-        private static char[] operators = new char[] { '+', '-', '/', '*', '^', '~', '|', '&', '>', '<' };
-        private static string[] commands = new string[] { "cls", "explain", "explain_on", "explain_off", "help?" };
+        private static char[] operators = new char[] { '+', '-', '/', '*', '^', '%', '~', '|', '&', '>', '<' };
+        private static string[] commands = new string[] { "cls", "parse", "explain", "explain_on", "explain_off", "code", "help", "regs" };
         private static string[] history = new string[64];
         private static int historyIndex = 0;
         private static string prompt = ">>> ";
-
 
         private static  EvaluatorContext context = new EvaluatorContext();
         private static  Tokenizer tokenizer = new Tokenizer();
@@ -39,6 +36,31 @@ namespace Shiny.Repl
             }
         }
 
+        static void ColorizeExpression(string expression)
+        {
+            foreach(var keyChar in expression)
+            {
+                Colorize(keyChar);
+            }
+        }
+
+        static void Colorize(char keyChar)
+        {
+            if (operators.Contains(keyChar))
+            {
+                Console.SetCursorPosition(Console.CursorLeft, Console.CursorTop);
+                ConsoleUtils.Write(ConsoleColor.Red, keyChar.ToString());
+            }
+            else if (char.IsLetter(keyChar))
+            {
+                ConsoleUtils.Write(ConsoleColor.Yellow, keyChar.ToString());
+            }
+            else
+            {
+                ConsoleUtils.Write(ConsoleColor.Green, keyChar.ToString());
+            }
+        }
+
         static string ProcessKeyEvents(string prompt)
         {
             Console.Write(prompt);
@@ -53,37 +75,34 @@ namespace Shiny.Repl
             while (keyInfo.Key != ConsoleKey.Enter)
             {
                 keyInfo = Console.ReadKey(true);
-                if (operators.Contains(keyInfo.KeyChar))
-                {
-                    Console.SetCursorPosition(Console.CursorLeft, Console.CursorTop);
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.Write(keyInfo.KeyChar);
-                    Console.ForegroundColor = ConsoleColor.Green;
-
-                    if (bufferIndex >= statementBuilder.Length)
-                    {
-                        statementBuilder.Append(keyInfo.KeyChar);
-                    }
-                    else
-                    {
-                        InsertBetween(statementBuilder, keyInfo.KeyChar, bufferIndex);
-                    }
-
-                    bufferIndex++;
-
-                }
-                else if (keyInfo.Key == ConsoleKey.UpArrow)
+                
+                if (keyInfo.Key == ConsoleKey.UpArrow)
                 {
                     if (historyIndex > 0) historyIndex--;
                     var historyStatement = history[historyIndex];
 
-                    Console.SetCursorPosition(baseIndex, Console.CursorTop);
-                    Console.Write(new string(' ', statementBuilder.Length));
-                    Console.SetCursorPosition(baseIndex, Console.CursorTop);
+                    if (historyStatement != null)
+                    {
+                        Console.SetCursorPosition(baseIndex, Console.CursorTop);
+                        Console.Write(new string(' ', statementBuilder.Length + historyStatement.Length));
+                        Console.SetCursorPosition(baseIndex, Console.CursorTop);
 
-                    Console.Write(historyStatement);
-                    statementBuilder.Clear();
-                    statementBuilder.Append(historyStatement);
+                        if (keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift))
+                        {
+                            Console.Write(statementBuilder.ToString() + historyStatement);
+                            statementBuilder.Append(statementBuilder.ToString() + historyStatement);
+                        }
+                        else
+                        {
+                            //
+                            // The statement needs to be colorized.
+                            //
+                            ColorizeExpression(historyStatement);
+                            statementBuilder.Clear();
+                            statementBuilder.Append(historyStatement);
+                        }
+                    }
+
                     bufferIndex = statementBuilder.Length;
 
                 }
@@ -96,7 +115,7 @@ namespace Shiny.Repl
                     Console.Write(new string(' ', statementBuilder.Length));
                     Console.SetCursorPosition(baseIndex, Console.CursorTop);
 
-                    Console.Write(historyStatement);
+                    ColorizeExpression(historyStatement);
                     statementBuilder.Clear();
                     statementBuilder.Append(historyStatement);
                     bufferIndex = statementBuilder.Length;
@@ -145,7 +164,7 @@ namespace Shiny.Repl
                 }
                 else
                 {
-                    Console.Write(keyInfo.KeyChar);
+                    Colorize(keyInfo.KeyChar);
 
                     if (bufferIndex >= statementBuilder.Length)
                     {
@@ -249,12 +268,12 @@ namespace Shiny.Repl
 
             foreach (var resolved in variables)
             {
-                var nestedPrompt = $"{resolved.Key} = ";
+                var nestedPrompt = $">>  {resolved.Key} = ";
 
                 var stmt = ProcessKeyEvents(nestedPrompt);
                 var value = Evaluate(stmt, nestedPrompt);
 
-                printer.Print(new Run() { Text = "  --------", Color = RunColor.White });
+                printer.Print(new Run() { Text = "    --------", Color = RunColor.White });
 
                 var existing = variables[resolved.Key];
 

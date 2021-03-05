@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 
 using BinaryExpression = Shiny.Repl.Parsing.BinaryExpression;
-using Expression = Shiny.Repl.Parsing.Expression;
+using Expression = Shiny.Repl.Parsing.AST_Node;
 using UnaryExpression = Shiny.Repl.Parsing.UnaryExpression;
 
 namespace Shiny.Calculator.Evaluation
@@ -80,6 +80,18 @@ namespace Shiny.Calculator.Evaluation
     {
         public string Text;
         public RunColor Color;
+
+        public static Run Green(string text) 
+            => new Run() { Text = text, Color = RunColor.Green };
+
+        public static Run White(string text)
+           => new Run() { Text = text, Color = RunColor.White };
+
+        public static Run Red(string text)
+            => new Run() { Text = text, Color = RunColor.Red };
+
+        public static Run Blue(string text)
+            => new Run() { Text = text, Color = RunColor.Blue };
     }
 
     public class ConsolePrinter : IPrinter
@@ -88,17 +100,29 @@ namespace Shiny.Calculator.Evaluation
         {
             Console.Clear();
         }
+
+        public void PrintInline(params Run[] runs)
+        {
+            if (runs != null)
+            {
+                Console.SetCursorPosition(Console.CursorLeft + Indent, Console.CursorTop);
+
+                foreach (var run in runs)
+                {
+                    var copy = Console.ForegroundColor;
+                    Console.ForegroundColor = (ConsoleColor)(int)run.Color;
+                    Console.Write(run.Text);
+                    Console.ForegroundColor = copy;
+                }
+            }
+        }
+
         public void Print(params Run[] runs)
         {
-            foreach (var run in runs)
-            {
-                var copy = Console.ForegroundColor;
-                Console.ForegroundColor = (ConsoleColor)(int)run.Color;
-                Console.Write(run.Text);
-                Console.ForegroundColor = copy;
-            }
-
+            PrintInline(runs);
             Console.WriteLine();
         }
+
+        public int Indent { get; set; }
     }
 }
