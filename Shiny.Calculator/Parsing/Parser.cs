@@ -115,27 +115,46 @@ namespace Shiny.Repl.Parsing
             throw new ArgumentException("Assembly Instruction Error - Unknown Instruction");
         }
 
+        private AST_Node ParseInstructionArgument(ref int i)
+        {
+            if (IsIndexingAccessOpen(i))
+            {
+                IndexingExpression indexing = new IndexingExpression()
+                {
+                    Expression = ParseBinaryExpression(ref i, 0)
+                };
+                return indexing;
+            }
+            else if (IsLiteralsOrVars(i))
+            {
+                return ParseLiteralsAndIdentifiers(ref i);
+            }
+
+            throw new ArgumentException("Assembly Instruction Error - Invalid Argument");
+        }
+
         private ASM_Instruction ParseTwoArgInstruction(string name, ref int i)
         {
             //
             // INST A,B
             //
-            if (IsLiteralsOrVars(i) && IsComma(i + 1) && IsLiteralsOrVars(i + 2))
+            AST_Node dest = ParseInstructionArgument(ref i);
+
+            Move(ref i);
+
+            if (IsComma(i) == false)
+                throw new ArgumentException("Assembly Instruction Error - Invalid Argument");
+
+            Move(ref i);
+            
+            AST_Node source = ParseInstructionArgument(ref i);
+
+            return new BinaryASMInstruction()
             {
-                var dest = ParseLiteralsAndIdentifiers(ref i);
-                Move(ref i);
-                Move(ref i);
-                var source = ParseLiteralsAndIdentifiers(ref i);
-
-                return new BinaryASMInstruction()
-                {
-                    Name = name,
-                    Desination = dest,
-                    Source = source
-                };
-            }
-
-            throw new ArgumentException("Assembly Instruction Error - Unknown Instruction");
+                Name = name,
+                Desination = dest,
+                Source = source
+            };
         }
 
         private CommandExpression ParseCommand(ref int i)
@@ -262,6 +281,21 @@ namespace Shiny.Repl.Parsing
                         i--;
                         return left;
                     }
+                }
+
+                //
+                // @IDEA:
+                // Indexing Access has sense in assembly simulation
+                // Perhaps we should pass it as an argument to recursive descent.
+                //
+                else if(IsIndexingAccessOpen(i))
+                {
+                    Move(ref i);
+                    return ParseBinaryExpression(ref i, 0);
+                }
+                else if(IsIndexingAccessClose(i))
+                {
+                    return left;
                 }
                 else if(IsOpenBracket(i))
                 {
@@ -463,6 +497,11 @@ namespace Shiny.Repl.Parsing
             return IsNumber(tokenIndex) || IsText(tokenIndex) || IsWord(tokenIndex) || IsBool(tokenIndex);
         }
 
+        private bool IsLiteralsOrVarsOrIndexing(int tokenIndex)
+        {
+            return IsNumber(tokenIndex) || IsText(tokenIndex) || IsWord(tokenIndex) || IsBool(tokenIndex) || IsIndexingAccessOpen(tokenIndex);
+        }
+
         private bool IsCommand(int tokenIndex)
         {
             if (tokenIndex < tokens.Count)
@@ -516,6 +555,36 @@ namespace Shiny.Repl.Parsing
                 var token = tokens[tokenIndex];
 
                 if (token.TokenName == "Number")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsIndexingAccessOpen(int tokenIndex)
+        {
+            if (tokenIndex < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+
+                if (token.TokenName == "BracketOpen")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsIndexingAccessClose(int tokenIndex)
+        {
+            if (tokenIndex < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+
+                if (token.TokenName == "BracketClose")
                 {
                     return true;
                 }
@@ -638,6 +707,11 @@ namespace Shiny.Repl.Parsing
     public class UnaryASMInstruction : ASM_Instruction
     {
         public AST_Node Source { get; set; }
+    }
+
+    public class IndexingExpression : AST_Node
+    {
+        public AST_Node Expression { get; set; }
     }
 
     public class IdentifierExpression : AST_Node

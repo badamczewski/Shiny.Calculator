@@ -13,7 +13,7 @@ namespace Shiny.Repl
     class Program
     {
         private static char[] operators = new char[] { '+', '-', '/', '*', '^', '%', '~', '|', '&', '>', '<' };
-        private static string[] commands = new string[] { "cls", "parse", "explain", "explain_on", "explain_off", "code", "help", "regs" };
+        private static string[] commands = new string[] { "cls", "parse", "explain", "explain_on", "explain_off", "code", "help", "regs", "mem" };
         private static string[] history = new string[64];
         private static int historyIndex = 0;
         private static string prompt = ">>> ";

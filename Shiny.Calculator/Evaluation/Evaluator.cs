@@ -16,10 +16,12 @@ namespace Shiny.Calculator.Evaluation
     {
         public bool IsExplainAll;
         public bool IsExplain;
+        public bool IsAssemblyContext;
     }
 
     public class Evaluator
     {
+        private Heap heap = new Heap(256);
         private Dictionary<string, EvaluatorState> variables = null;
         private Dictionary<string, EvaluatorState> registers = new Dictionary<string, EvaluatorState>() 
         {
@@ -53,6 +55,31 @@ namespace Shiny.Calculator.Evaluation
             return result;
         }
 
+        private EvaluatorState VisitAssemblyInstruction(AST_Node expression)
+        {
+            if (expression is BinaryExpression operatorExpression)
+            {
+                return EvaluateBinaryExpression(operatorExpression);
+            }
+            else if (expression is UnaryExpression unaryExpression)
+            {
+                return EvaluateUnaryExpression(unaryExpression);
+            }
+            else if (expression is LiteralExpression literalExpression)
+            {
+                return EvaluateLiteralExpression(literalExpression);
+            }
+            else if (expression is IdentifierExpression identifierExpression)
+            {
+                if (context.IsAssemblyContext)
+                    return registers[identifierExpression.Identifier];
+
+                return variables[identifierExpression.Identifier];
+            }
+
+            throw new ArgumentException($"Invalid Instruction Expression: '{expression.ToString()}'");
+        }
+
         private EvaluatorState Visit(AST_Node expression)
         {
             if (expression is BinaryExpression operatorExpression)
@@ -69,6 +96,9 @@ namespace Shiny.Calculator.Evaluation
             }
             else if (expression is IdentifierExpression identifierExpression)
             {
+                if (context.IsAssemblyContext)
+                    return registers[identifierExpression.Identifier];
+
                 return variables[identifierExpression.Identifier];
             }
             else if(expression is ASM_Instruction assemblyInstruction)
@@ -135,6 +165,19 @@ namespace Shiny.Calculator.Evaluation
 
                     return new EvaluatorState();
                 }
+                else if (commandExpression.CommandName == "mem")
+                {
+                    var size = heap.Memory.Length / 4;
+                    for(int i = 0; i < size; i++)
+                    {
+                        var value = heap.Read(i * 4);
+
+                        printer.PrintInline(Run.White("    " + i + " :"));
+                        PrintAsBitSet(value);
+                    }
+
+                    return new EvaluatorState();
+                }
 
                 return Visit(commandExpression.RightHandSide);
             }
@@ -182,41 +225,80 @@ namespace Shiny.Calculator.Evaluation
             return new EvaluatorState();
         }
 
-        private void EvaluateAsmMov(BinaryASMInstruction mov)
+        private EvaluatorState EvaluateSource(AST_Node source)
         {
             EvaluatorState state = null;
-            if (mov.Source is LiteralExpression literal)
+            if (source is LiteralExpression literal)
             {
                 state = EvaluateLiteralExpression(literal);
             }
-            else if (mov.Source is IdentifierExpression identifier)
+            else if (source is IdentifierExpression identifier)
             {
                 state = registers[identifier.Identifier];
             }
+            else if (source is IndexingExpression indexing)
+            {
+                //
+                // Evaluate.
+                //
+                context.IsAssemblyContext = true;
+                state = VisitAssemblyInstruction(indexing.Expression);
+                context.IsAssemblyContext = false;
+                //
+                // Get the value from the heap.
+                //
+                var value = heap.Read((int)long.Parse(state.Value));
+                state.Value = value.ToString();
+            }
+
+            return state;
+        }
+
+        private void EvaluateAsmMov(BinaryASMInstruction mov)
+        {
+            var sourceState = EvaluateSource(mov.Source);
 
             if (mov.Desination is IdentifierExpression identifierDest)
             {
-                registers[identifierDest.Identifier] = state;
+                registers[identifierDest.Identifier] = sourceState;
 
                 if (context.IsExplain)
                 {
                     printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
-                    PrintAsBitSet((int)long.Parse(state.Value));
+                    PrintAsBitSet((int)long.Parse(sourceState.Value));
+                }
+            }
+            else if (mov.Desination is IndexingExpression indexingDest)
+            {
+                //
+                // Evaluate.
+                //
+                context.IsAssemblyContext = true;
+                var destState = VisitAssemblyInstruction(indexingDest.Expression);
+                context.IsAssemblyContext = false;
+                //
+                // Get the value from the heap.
+                //
+                var offset = (int)long.Parse(destState.Value);
+                var value = (int)long.Parse(sourceState.Value);
+
+                var sourceValue = (int)long.Parse(sourceState.Value);
+                var destValue = heap.Read(offset);
+
+                var result = sourceValue;
+                heap.Write(result, offset);
+
+                if (context.IsExplain)
+                {
+                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {value}", Color = RunColor.White });
+                    PrintAsBitSet(value);
                 }
             }
         }
 
         private void EvaluateAsmAdd(BinaryASMInstruction add)
         {
-            EvaluatorState sourceState = null;
-            if (add.Source is LiteralExpression literal)
-            {
-                sourceState = EvaluateLiteralExpression(literal);
-            }
-            else if (add.Source is IdentifierExpression identifier)
-            {
-                sourceState = registers[identifier.Identifier];
-            }
+            var sourceState = EvaluateSource(add.Source);
 
             if (add.Desination is IdentifierExpression identifierDest)
             {
@@ -232,19 +314,36 @@ namespace Shiny.Calculator.Evaluation
                     PrintAsBitSet((int)long.Parse(destState.Value));
                 }
             }
+            else if (add.Desination is IndexingExpression indexingDest)
+            {
+                //
+                // Evaluate.
+                //
+                context.IsAssemblyContext = true;
+                var destState = VisitAssemblyInstruction(indexingDest.Expression);
+                context.IsAssemblyContext = false;
+                //
+                // Get the value from the heap.
+                //
+                var offset = (int)long.Parse(destState.Value);
+
+                var sourceValue = (int)long.Parse(sourceState.Value);
+                var destValue = heap.Read(offset);
+
+                var result = (sourceValue + destValue);
+                heap.Write(result, offset);
+
+                if (context.IsExplain)
+                {
+                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = RunColor.White });
+                    PrintAsBitSet(result);
+                }
+            }
         }
 
         private void EvaluateAsmSub(BinaryASMInstruction sub)
         {
-            EvaluatorState sourceState = null;
-            if (sub.Source is LiteralExpression literal)
-            {
-                sourceState = EvaluateLiteralExpression(literal);
-            }
-            else if (sub.Source is IdentifierExpression identifier)
-            {
-                sourceState = registers[identifier.Identifier];
-            }
+            EvaluatorState sourceState = EvaluateSource(sub.Source);
 
             if (sub.Desination is IdentifierExpression identifierDest)
             {
@@ -260,20 +359,37 @@ namespace Shiny.Calculator.Evaluation
                     PrintAsBitSet((int)long.Parse(destState.Value));
                 }
             }
+            else if (sub.Desination is IndexingExpression indexingDest)
+            {
+                //
+                // Evaluate.
+                //
+                context.IsAssemblyContext = true;
+                var destState = VisitAssemblyInstruction(indexingDest.Expression);
+                context.IsAssemblyContext = false;
+                //
+                // Get the value from the heap.
+                //
+                var offset = (int)long.Parse(destState.Value);
+
+                var sourceValue = (int)long.Parse(sourceState.Value);
+                var destValue = heap.Read(offset);
+
+                var result = (sourceValue - destValue);
+                heap.Write(result, offset);
+
+                if (context.IsExplain)
+                {
+                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = RunColor.White });
+                    PrintAsBitSet(result);
+                }
+            }
         }
 
         private void EvaluateAsmShr(BinaryASMInstruction shr)
         {
-            EvaluatorState sourceState = null;
-            if (shr.Source is LiteralExpression literal)
-            {
-                sourceState = EvaluateLiteralExpression(literal);
-            }
-            else if (shr.Source is IdentifierExpression identifier)
-            {
-                sourceState = registers[identifier.Identifier];
-            }
-
+            var sourceState = EvaluateSource(shr.Source);
+            
             if (shr.Desination is IdentifierExpression identifierDest)
             {
                 var destState = registers[identifierDest.Identifier];
@@ -288,6 +404,32 @@ namespace Shiny.Calculator.Evaluation
                     PrintAsBitSet((int)long.Parse(destState.Value));
                 }
             }
+            else if (shr.Desination is IndexingExpression indexingDest)
+            {
+                //
+                // Evaluate.
+                //
+                context.IsAssemblyContext = true;
+                var destState = VisitAssemblyInstruction(indexingDest.Expression);
+                context.IsAssemblyContext = false;
+                //
+                // Get the value from the heap.
+                //
+                var offset = (int)long.Parse(destState.Value);
+
+                var sourceValue = (int)long.Parse(sourceState.Value);
+                var destValue = heap.Read(offset);
+
+                var result = (sourceValue >> destValue);
+                heap.Write(result, offset);
+
+                if (context.IsExplain)
+                {
+                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = RunColor.White });
+                    PrintAsBitSet(result);
+                }
+            }
+
         }
 
         private void EvaluateAsmMul(UnaryASMInstruction mul)
@@ -344,16 +486,8 @@ namespace Shiny.Calculator.Evaluation
 
         private void EvaluateAsmShl(BinaryASMInstruction shl)
         {
-            EvaluatorState sourceState = null;
-            if (shl.Source is LiteralExpression literal)
-            {
-                sourceState = EvaluateLiteralExpression(literal);
-            }
-            else if (shl.Source is IdentifierExpression identifier)
-            {
-                sourceState = registers[identifier.Identifier];
-            }
-
+            var sourceState = EvaluateSource(shl.Source);
+            
             if (shl.Desination is IdentifierExpression identifierDest)
             {
                 var destState = registers[identifierDest.Identifier];
@@ -366,6 +500,31 @@ namespace Shiny.Calculator.Evaluation
                 {
                     printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
                     PrintAsBitSet((int)long.Parse(destState.Value));
+                }
+            }
+            else if (shl.Desination is IndexingExpression indexingDest)
+            {
+                //
+                // Evaluate.
+                //
+                context.IsAssemblyContext = true;
+                var destState = VisitAssemblyInstruction(indexingDest.Expression);
+                context.IsAssemblyContext = false;
+                //
+                // Get the value from the heap.
+                //
+                var offset = (int)long.Parse(destState.Value);
+
+                var sourceValue = (int)long.Parse(sourceState.Value);
+                var destValue = heap.Read(offset);
+
+                var result = (sourceValue << destValue);
+                heap.Write(result, offset);
+
+                if (context.IsExplain)
+                {
+                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = RunColor.White });
+                    PrintAsBitSet(result);
                 }
             }
         }
