@@ -14,15 +14,16 @@ namespace Shiny.Repl
     {
         private static char[] operators = new char[] { '+', '-', '/', '*', '^', '%', '~', '|', '&', '>', '<' };
         private static string[] commands = new string[] { "cls", "parse", "explain", "explain_on", "explain_off", "code", "help", "regs", "mem" };
+        private static string[] instructions = new string[] { "mov", "add", "sub", "mul", "div", "shr", "shl" };
         private static string[] history = new string[64];
         private static int historyIndex = 0;
         private static string prompt = ">>> ";
 
-        private static  EvaluatorContext context = new EvaluatorContext();
-        private static  Tokenizer tokenizer = new Tokenizer();
-        private static  Parser parser = new Parser(commands);
-        private static  Evaluator evaluator = new Evaluator();
-        private static  ConsolePrinter printer = new ConsolePrinter();
+        private static EvaluatorContext context = new EvaluatorContext();
+        private static Tokenizer tokenizer = new Tokenizer();
+        private static Parser parser = new Parser(commands, instructions);
+        private static Evaluator evaluator = new Evaluator();
+        private static ConsolePrinter printer = new ConsolePrinter();
 
         static void Main(string[] args)
         {

@@ -1,4 +1,5 @@
-﻿using Shiny.Repl.Tokenization;
+﻿using Shiny.Calculator.Parsing;
+using Shiny.Repl.Tokenization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,19 +11,26 @@ namespace Shiny.Repl.Parsing
     {
         private List<Token> tokens;
         private string[] commands;
-        private string[] instructions = new string[] { "mov", "add", "sub", "mul", "div", "shr", "shl" };
+        private string[] instructions;
 
-
-        public Parser(string[] commands)
+        public Parser(string[] commands, string[] instructions)
         {
             this.commands = commands;
+            this.instructions = instructions;
         }
 
         public AST_Node Parse(List<Token> tokens)
         {
-            this.tokens = tokens;
-            int i = 0;
-            return ParseStatement(ref i);
+            try
+            {
+                this.tokens = tokens;
+                int i = 0;
+                return ParseStatement(ref i);
+            }
+            catch(ParsingException ex)
+            {
+                return new AST_Error() { Line = ex.Line, Possition = ex.Position, Message = ex.Message };
+            }
         }
 
         public AST_Node ParseStatement(ref int i)
@@ -41,28 +49,9 @@ namespace Shiny.Repl.Parsing
             }
         }
 
-        private bool IsInstruction(int tokenIndex)
-        {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-                var value = token.GetValue();
-
-                if (token.TokenName == "Word" && instructions.Contains(value))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-    
-
         private ASM_Instruction ParseInstruction(ref int i)
         {
             var name = tokens[i].GetValue().ToLower();
-
-            Move(ref i);
 
             if (name == "mov")
             {
@@ -93,26 +82,25 @@ namespace Shiny.Repl.Parsing
                 return ParseSingleArgInstruction(name, ref i);
             }
 
-            throw new ArgumentException("Assembly Instruction Error - Unknown Instruction");
+            throw ParsingError("Assembly Instruction Error - Unknown Instruction", i);
         }
 
         private ASM_Instruction ParseSingleArgInstruction(string name, ref int i)
         {
+            if (IsLiteralsOrVarsOrIndexing(i + 1) == false)
+                throw ParsingError("Assembly Instruction Error - Missing arguments", i);
+
+            Move(ref i);
             //
             // INST A
             //
-            if (IsLiteralsOrVars(i))
+            var source = ParseInstructionArgument(ref i);
+
+            return new UnaryASMInstruction()
             {
-                var source = ParseLiteralsAndIdentifiers(ref i);
-
-                return new UnaryASMInstruction()
-                {
-                    Name = name,
-                    Source = source
-                };
-            }
-
-            throw new ArgumentException("Assembly Instruction Error - Unknown Instruction");
+                Name = name,
+                Source = source
+            };
         }
 
         private AST_Node ParseInstructionArgument(ref int i)
@@ -121,7 +109,7 @@ namespace Shiny.Repl.Parsing
             {
                 IndexingExpression indexing = new IndexingExpression()
                 {
-                    Expression = ParseBinaryExpression(ref i, 0)
+                    Expression = ParseBinaryExpression(ref i, 0, true)
                 };
                 return indexing;
             }
@@ -130,21 +118,28 @@ namespace Shiny.Repl.Parsing
                 return ParseLiteralsAndIdentifiers(ref i);
             }
 
-            throw new ArgumentException("Assembly Instruction Error - Invalid Argument");
+            throw ParsingError("Assembly Instruction Error - Invalid Argument", i);
         }
 
         private ASM_Instruction ParseTwoArgInstruction(string name, ref int i)
         {
+            if(IsLiteralsOrVarsOrIndexing(i + 1) == false)
+                throw ParsingError("Assembly Instruction Error - Missing argument", i);
+
+            Move(ref i);
+
             //
             // INST A,B
             //
             AST_Node dest = ParseInstructionArgument(ref i);
 
+            if (IsComma(i + 1) == false && IsLiteralsOrVarsOrIndexing(i + 2))
+                throw ParsingError("Assembly Instruction Error - Missing second argument", i);
+
+            if (IsComma(i + 1) == false)
+                throw ParsingError("Assembly Instruction Error - Invalid Argument (missing comma)", i);
+
             Move(ref i);
-
-            if (IsComma(i) == false)
-                throw new ArgumentException("Assembly Instruction Error - Invalid Argument");
-
             Move(ref i);
             
             AST_Node source = ParseInstructionArgument(ref i);
@@ -222,7 +217,7 @@ namespace Shiny.Repl.Parsing
         //   exp = (l = prev_exp, r = 8)
         //
         #endregion
-        private AST_Node ParseBinaryExpression(ref int i, int level)
+        private AST_Node ParseBinaryExpression(ref int i, int level, bool isAssemblyAdressing = false)
         {
             AST_Node left = null;
 
@@ -268,7 +263,7 @@ namespace Shiny.Repl.Parsing
                     if (@operator.Level > level)
                     {
                         Move(ref i);
-                        var right = ParseBinaryExpression(ref i, @operator.Level);
+                        var right = ParseBinaryExpression(ref i, @operator.Level, isAssemblyAdressing);
                         left = new BinaryExpression() { Left = left, Operator = @operator.GetValue(), Right = right };
                     }
                     else
@@ -291,10 +286,19 @@ namespace Shiny.Repl.Parsing
                 else if(IsIndexingAccessOpen(i))
                 {
                     Move(ref i);
-                    return ParseBinaryExpression(ref i, 0);
+                    return ParseBinaryExpression(ref i, 0, isAssemblyAdressing);
                 }
                 else if(IsIndexingAccessClose(i))
                 {
+                    return left;
+                }
+                //
+                // For Assembly index addressing we need to 
+                // exit when we encouter a comma.
+                //
+                else if(IsComma(i) && isAssemblyAdressing)
+                {
+                    i--;
                     return left;
                 }
                 else if(IsOpenBracket(i))
@@ -368,7 +372,7 @@ namespace Shiny.Repl.Parsing
                 return variable;
             }
 
-            throw new ArgumentException("Binary Expression Error (Left) - Incorect Token");
+            throw ParsingError("Binary Expression Error (Left) - Incorect Token", i);
         }
 
         private int Move(ref int i, Predicate<int> assert = null)
@@ -592,6 +596,37 @@ namespace Shiny.Repl.Parsing
 
             return false;
         }
+
+
+        private bool IsInstruction(int tokenIndex)
+        {
+            if (tokenIndex < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+                var value = token.GetValue();
+
+                if (token.TokenName == "Word" && instructions.Contains(value))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private ParsingException ParsingError(string message, int i)
+        {
+            int line = -1;
+            int pos  = -1; 
+
+            if(i < tokens.Count)
+            {
+                line = tokens[i].Line;
+                pos  = tokens[i].Position;
+            }
+
+            return new ParsingException(message, line, pos);
+        }
     }
 
     public class BinaryExpression : AST_Node
@@ -618,6 +653,11 @@ namespace Shiny.Repl.Parsing
             Console.WriteLine($"UNARY-{Name} = {Operator}");
             Left.Print();
         }
+    }
+
+    public class AST_Error : AST_Node
+    {
+        public string Message { get; set; }
     }
 
     public class AST_Node

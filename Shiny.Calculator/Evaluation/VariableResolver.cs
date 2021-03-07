@@ -49,6 +49,10 @@ namespace Shiny.Calculator.Evaluation
             {
                 return;
             }
+            else if(expression is AST_Error error)
+            {
+                return;
+            }
 
             throw new ArgumentException($"Invalid Expression: '{expression.ToString()}'");
         }

@@ -82,6 +82,16 @@ namespace Shiny.Calculator.Evaluation
 
         private EvaluatorState Visit(AST_Node expression)
         {
+            //
+            // We either have a tree or a singe AST_Error node here.
+            // So we need to process the error.
+            //
+            if(expression is AST_Error error)
+            {
+                printer.Print(Run.Red($" L:{error.Line} P:{error.Possition} {error.Message}"));
+                return new EvaluatorState();
+            }
+
             if (expression is BinaryExpression operatorExpression)
             {
                 return EvaluateBinaryExpression(operatorExpression);
