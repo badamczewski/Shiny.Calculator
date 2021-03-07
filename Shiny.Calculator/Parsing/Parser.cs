@@ -43,10 +43,42 @@ namespace Shiny.Repl.Parsing
             {
                 return ParseInstruction(ref i);
             }
+            else if(IsVariableAssigmnent(i))
+            {
+                return ParseVariableAssigment(ref i);
+            }
             else
             {
                 return ParseBinaryExpression(ref i, 0);
             }
+        }
+
+        private AST_Node ParseVariableAssigment(ref int i)
+        {
+            //
+            // Create the identifier.
+            // 
+            var variable = new IdentifierExpression() 
+            { 
+                Identifier = tokens[i].GetValue() 
+            };
+
+            //
+            // Shoud be equals operator.
+            //
+            Move(ref i);
+            // Move to the acutal assigment.
+            Move(ref i);
+            //
+            // 
+            //
+            var assigment = ParseBinaryExpression(ref i, 0);
+
+            return new VariableAssigmentExpression() 
+            { 
+                Identifier = variable, 
+                Assigment = assigment 
+            };
         }
 
         private ASM_Instruction ParseInstruction(ref int i)
@@ -597,6 +629,25 @@ namespace Shiny.Repl.Parsing
             return false;
         }
 
+        private bool IsVariableAssigmnent(int tokenIndex)
+        {
+            if (tokenIndex + 1 < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+                var value = token.GetValue();
+
+                var nextToken = tokens[tokenIndex + 1];
+
+                if (token.TokenName == "Word" && 
+                    nextToken.TokenName == "Operator" && nextToken.GetValue() == "=")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
 
         private bool IsInstruction(int tokenIndex)
         {
@@ -752,6 +803,12 @@ namespace Shiny.Repl.Parsing
     public class IndexingExpression : AST_Node
     {
         public AST_Node Expression { get; set; }
+    }
+
+    public class VariableAssigmentExpression : AST_Node
+    {
+        public IdentifierExpression Identifier { get; set; }
+        public AST_Node Assigment { get; set; }
     }
 
     public class IdentifierExpression : AST_Node

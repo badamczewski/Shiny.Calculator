@@ -264,19 +264,31 @@ namespace Shiny.Repl
 
             var tokens = tokenizer.Tokenize(statement);
             var ast = parser.Parse(tokens);
-
             var variables = resolver.Resolve(ast);
+            var vars = evaluator.GetVariables();
 
             foreach (var resolved in variables)
             {
+                //
+                // Check if we have already resolved this variable.
+                // If we did then don't ask for value, we are good.
+                //
+                if (vars.ContainsKey(resolved.Key))
+                    continue;
+
                 var nestedPrompt = $">>  {resolved.Key} = ";
 
                 var stmt = ProcessKeyEvents(nestedPrompt);
                 var value = Evaluate(stmt, nestedPrompt);
 
                 printer.Print(new Run() { Text = "    --------", Color = RunColor.White });
-
                 var existing = variables[resolved.Key];
+
+                if(value == null)
+                {
+                    printer.Print(Run.Red($"Variable '{resolved.Key}' needs a value"));
+                    return new EvaluatorState();
+                }
 
                 existing.IsSigned = value.IsSigned;
                 existing.Type = value.Type;

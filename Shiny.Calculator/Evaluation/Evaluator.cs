@@ -22,7 +22,7 @@ namespace Shiny.Calculator.Evaluation
     public class Evaluator
     {
         private Heap heap = new Heap(256);
-        private Dictionary<string, EvaluatorState> variables = null;
+        private Dictionary<string, EvaluatorState> variables = new Dictionary<string, EvaluatorState>();
         private Dictionary<string, EvaluatorState> registers = new Dictionary<string, EvaluatorState>() 
         {
             { "eax", new EvaluatorState() { Value = "0", Type = LiteralType.Number } },
@@ -41,7 +41,15 @@ namespace Shiny.Calculator.Evaluation
         {
             this.context = context;
             this.printer = printer;
-            variables = resolvedVariables;
+
+            foreach(var resolved in resolvedVariables)
+            {
+                if(variables.TryGetValue(resolved.Key, out var varialbe) == false)
+                {
+                    variables.Add(resolved.Key, resolved.Value);
+                }
+            }
+
             var result = Visit(expression);
 
             if (context.IsExplainAll) context.IsExplain = true;
@@ -53,6 +61,11 @@ namespace Shiny.Calculator.Evaluation
             }
 
             return result;
+        }
+
+        public Dictionary<string, EvaluatorState> GetVariables()
+        {
+            return variables;
         }
 
         private EvaluatorState VisitAssemblyInstruction(AST_Node expression)
@@ -110,6 +123,10 @@ namespace Shiny.Calculator.Evaluation
                     return registers[identifierExpression.Identifier];
 
                 return variables[identifierExpression.Identifier];
+            }
+            else if(expression is VariableAssigmentExpression assigmentExpression)
+            {
+                return EvaluateVariableAssigmentExpression(assigmentExpression);
             }
             else if(expression is ASM_Instruction assemblyInstruction)
             {
@@ -193,6 +210,24 @@ namespace Shiny.Calculator.Evaluation
             }
 
             throw new ArgumentException($"Invalid Expression: '{expression.ToString()}'");
+        }
+
+        private EvaluatorState EvaluateVariableAssigmentExpression(VariableAssigmentExpression assigmentExpression)
+        {
+            var identifier = assigmentExpression.Identifier.Identifier;
+            if (variables.TryGetValue(identifier, out var state))
+            {
+                state = Visit(assigmentExpression.Assigment);
+                variables[identifier] = state;
+            }
+            else
+            {
+                state = Visit(assigmentExpression.Assigment);
+                state.IsResolved = true;
+
+                variables.Add(identifier, state);
+            }
+            return state;
         }
 
         private EvaluatorState EvaluateAssemblyInstruction(ASM_Instruction assemblyInstruction)

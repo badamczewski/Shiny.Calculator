@@ -38,7 +38,11 @@ namespace Shiny.Calculator.Evaluation
             }
             else if (expression is IdentifierExpression identifierExpression)
             {
-                variables.TryAdd(identifierExpression.Identifier, new EvaluatorState());
+                variables.TryAdd(identifierExpression.Identifier, new EvaluatorState() { IsResolved = false });
+                return;
+            }
+            else if(expression is VariableAssigmentExpression variableAssigmentExpression)
+            {
                 return;
             }
             else if (expression is CommandExpression commandExpression)
