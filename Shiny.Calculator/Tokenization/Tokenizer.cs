@@ -31,11 +31,11 @@ namespace Shiny.Repl.Tokenization
 
                 if (c == newLineChar)
                 {
+                    tokens.Add(new EOSToken() { Line = line, Position = offset, Input = input.Slice(i, 1) });
+
                     i++;
                     line++;
                     offset = 0;
-
-                    continue;
                 }
                 else if (IsColon(i))
                 {
@@ -263,9 +263,9 @@ namespace Shiny.Repl.Tokenization
             return c == '(' || c == '[';
         }
 
-        private EOFToken ParseEndOfStatement(ref int i, ref int line, ref int offset)
+        private EOSToken ParseEndOfStatement(ref int i, ref int line, ref int offset)
         {
-            var eos = new EOFToken() { Input = input.Slice(i, 1), Line = line, Position = offset };
+            var eos = new EOSToken() { Input = input.Slice(i, 1), Line = line, Position = offset };
 
             i++;
             offset++;
@@ -662,9 +662,9 @@ namespace Shiny.Repl.Tokenization
         public BinaryOperatorToken() : base("BinaryOperator") { }
     }
 
-    public class EOFToken : Token
+    public class EOSToken : Token
     {
-        public EOFToken() : base("EOF") { }
+        public EOSToken() : base("EOS") { }
     }
 
     public class DotToken : Token

@@ -9,6 +9,7 @@ using BinaryExpression = Shiny.Repl.Parsing.BinaryExpression;
 using AST_Node = Shiny.Repl.Parsing.AST_Node;
 using UnaryExpression = Shiny.Repl.Parsing.UnaryExpression;
 using System.IO;
+using Shiny.Calculator.Parsing;
 
 namespace Shiny.Calculator.Evaluation
 {
@@ -35,7 +36,7 @@ namespace Shiny.Calculator.Evaluation
         private IPrinter printer;
 
         public EvaluatorState Evaluate(
-            AST_Node expression,
+            AST syntaxTree,
             Dictionary<string, EvaluatorState> resolvedVariables,
             IPrinter printer, EvaluatorContext context)
         {
@@ -50,11 +51,11 @@ namespace Shiny.Calculator.Evaluation
                 }
             }
 
-            var result = Visit(expression);
+            var result = Visit(syntaxTree.Root);
 
             if (context.IsExplainAll) context.IsExplain = true;
 
-            if (result.Value != null)
+            if (result.Type == LiteralType.Number && result.Value != null)
             {
                 printer.Print(new Run() { Text = "    =", Color = RunColor.Red });
                 PrintAsBitSet((int)long.Parse(result.Value));
@@ -131,6 +132,10 @@ namespace Shiny.Calculator.Evaluation
             else if(expression is ASM_Instruction assemblyInstruction)
             {
                 return EvaluateAssemblyInstruction(assemblyInstruction);
+            }
+            else if(expression is BlockExpression blockExpression)
+            {
+                return new EvaluatorState();
             }
             else if(expression is CommandExpression commandExpression)
             {
@@ -214,6 +219,11 @@ namespace Shiny.Calculator.Evaluation
 
         private EvaluatorState EvaluateVariableAssigmentExpression(VariableAssigmentExpression assigmentExpression)
         {
+            if(assigmentExpression.Assigment is PartialBlockExpression partialBlock)
+            {
+                return new EvaluatorState() { Type = LiteralType.Special, Value = EvaluatorSpecialState.MultiLineMode };
+            }
+
             var identifier = assigmentExpression.Identifier.Identifier;
             if (variables.TryGetValue(identifier, out var state))
             {
@@ -223,7 +233,6 @@ namespace Shiny.Calculator.Evaluation
             else
             {
                 state = Visit(assigmentExpression.Assigment);
-                state.IsResolved = true;
 
                 variables.Add(identifier, state);
             }
@@ -573,7 +582,6 @@ namespace Shiny.Calculator.Evaluation
                 }
             }
         }
-
  
         private void PrintCode(string path)
         {

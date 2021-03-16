@@ -9,6 +9,7 @@ namespace Shiny.Repl.Parsing
 {
     public class Parser
     {
+        private List<AST_Error> errors = null;
         private List<Token> tokens;
         private string[] commands;
         private string[] instructions;
@@ -19,17 +20,25 @@ namespace Shiny.Repl.Parsing
             this.instructions = instructions;
         }
 
-        public AST_Node Parse(List<Token> tokens)
+        public AST Parse(List<Token> tokens)
         {
+            errors = new List<AST_Error>();
+            AST syntaxTree = new AST();
+
             try
             {
                 this.tokens = tokens;
                 int i = 0;
-                return ParseStatement(ref i);
+                var stmt = ParseStatement(ref i);
+                syntaxTree.Root = stmt;
+                syntaxTree.Errors = errors;
+
+                return syntaxTree;
             }
-            catch(ParsingException ex)
+            catch(Exception ex)
             {
-                return new AST_Error() { Line = ex.Line, Possition = ex.Position, Message = ex.Message };
+                ParsingError(ex.Message, -1);
+                return syntaxTree;
             }
         }
 
@@ -47,10 +56,12 @@ namespace Shiny.Repl.Parsing
             {
                 return ParseVariableAssigment(ref i);
             }
-            else
+            else if(IsLiteralsOrVars(i))
             {
                 return ParseBinaryExpression(ref i, 0);
             }
+
+            return ParsingError("Unknown statement", i);
         }
 
         private AST_Node ParseVariableAssigment(ref int i)
@@ -70,18 +81,38 @@ namespace Shiny.Repl.Parsing
             // Move to the acutal assigment.
             Move(ref i);
             //
-            // 
+            // Check if this is a block assigment or just a binary expression. 
             //
-            var assigment = ParseBinaryExpression(ref i, 0);
+            if (IsOpenBlock(i))
+            {
+                //
+                // Create a partial block that will let the caller know
+                // that we need to change to multiline mode and re-parse the entire
+                // program.
+                //
+                if(IsLastToken(i + 1))
+                {
+                    return new VariableAssigmentExpression()
+                    {
+                        Identifier = variable,
+                        Assigment = new PartialBlockExpression()
+                    };
+                }
 
-            return new VariableAssigmentExpression() 
-            { 
-                Identifier = variable, 
-                Assigment = assigment 
-            };
+                return new BlockExpression();
+            }
+            else
+            {
+                var assigment = ParseBinaryExpression(ref i, 0);
+                return new VariableAssigmentExpression()
+                {
+                    Identifier = variable,
+                    Assigment = assigment
+                };
+            }
         }
 
-        private ASM_Instruction ParseInstruction(ref int i)
+        private AST_Node ParseInstruction(ref int i)
         {
             var name = tokens[i].GetValue().ToLower();
 
@@ -113,14 +144,14 @@ namespace Shiny.Repl.Parsing
             {
                 return ParseSingleArgInstruction(name, ref i);
             }
-
-            throw ParsingError("Assembly Instruction Error - Unknown Instruction", i);
+ 
+            return ParsingError("Unknown assembly instruction", i);
         }
 
-        private ASM_Instruction ParseSingleArgInstruction(string name, ref int i)
+        private AST_Node ParseSingleArgInstruction(string name, ref int i)
         {
             if (IsLiteralsOrVarsOrIndexing(i + 1) == false)
-                throw ParsingError("Assembly Instruction Error - Missing arguments", i);
+                return ParsingError("Missing instruction arguments", i);
 
             Move(ref i);
             //
@@ -150,13 +181,13 @@ namespace Shiny.Repl.Parsing
                 return ParseLiteralsAndIdentifiers(ref i);
             }
 
-            throw ParsingError("Assembly Instruction Error - Invalid Argument", i);
+            return ParsingError("Invalid instruction argument", i);
         }
 
-        private ASM_Instruction ParseTwoArgInstruction(string name, ref int i)
+        private AST_Node ParseTwoArgInstruction(string name, ref int i)
         {
             if(IsLiteralsOrVarsOrIndexing(i + 1) == false)
-                throw ParsingError("Assembly Instruction Error - Missing argument", i);
+                return ParsingError("Missing instruction argument", i);
 
             Move(ref i);
 
@@ -166,10 +197,10 @@ namespace Shiny.Repl.Parsing
             AST_Node dest = ParseInstructionArgument(ref i);
 
             if (IsComma(i + 1) == false && IsLiteralsOrVarsOrIndexing(i + 2))
-                throw ParsingError("Assembly Instruction Error - Missing second argument", i);
+                return ParsingError("Missing second argument", i);
 
             if (IsComma(i + 1) == false)
-                throw ParsingError("Assembly Instruction Error - Invalid Argument (missing comma)", i);
+                return ParsingError("Invalid argument (missing comma)", i);
 
             Move(ref i);
             Move(ref i);
@@ -289,6 +320,14 @@ namespace Shiny.Repl.Parsing
                     var @operator = (OperatorToken)token;
 
                     //
+                    // Validate if the next token is a valid one.
+                    //
+                    if (IsOperator(i + 1))
+                        ParsingError("Expected literal or variable, but got operator.", i + 1);
+
+
+
+                    //
                     // Check if we should descent deeper, if the operator has a
                     // higher level value we simply call parse binary again.
                     //
@@ -345,6 +384,10 @@ namespace Shiny.Repl.Parsing
                 else if (IsLiteralsOrVars(i))
                 {
                     left = ParseLiteralsAndIdentifiers(ref i);
+                }
+                else
+                {
+                    return ParsingError("Unexpected sub-expression.", i);
                 }
             }
 
@@ -404,7 +447,7 @@ namespace Shiny.Repl.Parsing
                 return variable;
             }
 
-            throw ParsingError("Binary Expression Error (Left) - Incorect Token", i);
+            return ParsingError("Incorrect sub-expression.", i);
         }
 
         private int Move(ref int i, Predicate<int> assert = null)
@@ -446,6 +489,56 @@ namespace Shiny.Repl.Parsing
                     (token.GetValue() == "-" || token.GetValue() == "~"))
                 {
                     return IsOpenBracket(tokenIndex + 1);
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsEndOfStatement(int tokenIndex)
+        {
+            if (tokenIndex < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+
+                if (token.TokenName == "EOS")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsLastToken(int tokenIndex)
+        {
+            return tokenIndex >= tokens.Count - 1;
+        }
+
+        private bool IsOpenBlock(int tokenIndex)
+        {
+            if (tokenIndex < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+
+                if (token.TokenName == "BlockOpen" && token.GetValue() == "{")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsCloseBlock(int tokenIndex)
+        {
+            if (tokenIndex < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+
+                if (token.TokenName == "BlockClose" && token.GetValue() == "}")
+                {
+                    return true;
                 }
             }
 
@@ -665,18 +758,30 @@ namespace Shiny.Repl.Parsing
             return false;
         }
 
-        private ParsingException ParsingError(string message, int i)
+        private AST_Node ParsingError(string message, int i)
         {
             int line = -1;
-            int pos  = -1; 
+            int pos  = -1;
 
-            if(i < tokens.Count)
+            Token[] tokensOnTheSameLine = null;
+
+            if (i < tokens.Count)
             {
                 line = tokens[i].Line;
                 pos  = tokens[i].Position;
+
+                tokensOnTheSameLine = tokens.Where(x => x.Line == line).ToArray();
             }
 
-            return new ParsingException(message, line, pos);
+            var error =  new AST_Error() 
+            { 
+                Message = message, 
+                Line = line, Possition = pos, 
+                SurroundingTokens = tokensOnTheSameLine 
+            };
+
+            errors.Add(error);
+            return error;
         }
     }
 
@@ -709,6 +814,7 @@ namespace Shiny.Repl.Parsing
     public class AST_Error : AST_Node
     {
         public string Message { get; set; }
+        public Token[] SurroundingTokens { get; set; }
     }
 
     public class AST_Node
@@ -742,7 +848,8 @@ namespace Shiny.Repl.Parsing
         Array,
         Void,
         Struct,
-        Function
+        Function,
+        Special
     }
 
     public class LiteralExpression : AST_Node
@@ -803,6 +910,17 @@ namespace Shiny.Repl.Parsing
     public class IndexingExpression : AST_Node
     {
         public AST_Node Expression { get; set; }
+    }
+
+    //
+    // Nothing here, it's a partial block assigment.
+    // We allow it since it's a special top level node.
+    // 
+    public class PartialBlockExpression : AST_Node {}
+
+    public class BlockExpression : AST_Node
+    {
+        public AST_Node Root { get; set; }
     }
 
     public class VariableAssigmentExpression : AST_Node

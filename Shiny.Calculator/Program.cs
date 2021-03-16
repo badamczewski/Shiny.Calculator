@@ -6,6 +6,7 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Shiny.Repl
@@ -29,11 +30,52 @@ namespace Shiny.Repl
         {
             Console.WriteLine(PrintLogo());
 
+            bool isMultiline = false;
+            char breakKey = '\r';
+            StringBuilder statementsBuilder = new StringBuilder();
+
+            string currentPrompt = prompt;
+
             while (true)
             {
-                var statement = ProcessKeyEvents(prompt);
-                history[historyIndex++ % history.Length] = statement;
-                Evaluate(statement, prompt);
+                var data = ProcessKeyEvents(currentPrompt, breakKey, isMultiline);
+                statementsBuilder.Append(data.Statement);
+
+                if (isMultiline)
+                {
+                    if (data.IsTerminated)
+                    {
+                        currentPrompt = prompt;
+                        breakKey = '\r';
+                        isMultiline = false;
+
+                        Evaluate(statementsBuilder.ToString(), prompt);
+                        statementsBuilder.Clear();
+                    }
+                }
+                else
+                {
+                    var stmt = statementsBuilder.ToString();
+                    history[historyIndex++ % history.Length] = stmt;
+                    var result = Evaluate(stmt, prompt);
+
+                    //
+                    // Process special commands like multiline prompt.
+                    //
+                    if (result != null && result.Type == LiteralType.Special)
+                    {
+                        if (result.Value == EvaluatorSpecialState.MultiLineMode)
+                        {
+                            isMultiline = true;
+                            breakKey = '}';
+                            currentPrompt = ">>| ";
+                        }
+                    }
+                    else
+                    {
+                        statementsBuilder.Clear();
+                    }
+                }
             }
         }
 
@@ -62,21 +104,21 @@ namespace Shiny.Repl
             }
         }
 
-        static string ProcessKeyEvents(string prompt)
+        static KeyBuffer ProcessKeyEvents(string prompt, char breakKey, bool isMultiLine = false)
         {
             Console.Write(prompt);
             StringBuilder statementBuilder = new StringBuilder();
-
             Console.ForegroundColor = ConsoleColor.Green;
 
             var keyInfo = new ConsoleKeyInfo();
             int bufferIndex = 0;
             int baseIndex = prompt.Length;
+            bool isTerminated = false;
 
-            while (keyInfo.Key != ConsoleKey.Enter)
+            while (keyInfo.KeyChar != breakKey)
             {
                 keyInfo = Console.ReadKey(true);
-                
+                            
                 if (keyInfo.Key == ConsoleKey.UpArrow)
                 {
                     if (historyIndex > 0) historyIndex--;
@@ -159,8 +201,26 @@ namespace Shiny.Repl
                     bufferIndex--;
 
                 }
-                else if (keyInfo.KeyChar == '\r')
+                else if(keyInfo.KeyChar == breakKey)
                 {
+                    //
+                    // This is not an empty key so we need to display it.
+                    //
+                    if (keyInfo.Key != ConsoleKey.Enter)
+                    {
+                        statementBuilder.Append(keyInfo.KeyChar);
+                        Console.Write(keyInfo.KeyChar);
+                    }
+
+                    isTerminated = true;
+                    break;
+                }
+                //
+                // Move to new line and break here.
+                //
+                else if (isMultiLine && keyInfo.Key == ConsoleKey.Enter)
+                {
+                    Console.WriteLine();
                     break;
                 }
                 else
@@ -192,7 +252,7 @@ namespace Shiny.Repl
                 }
             }
 
-            return statementBuilder.ToString();
+            return new KeyBuffer() { Statement = statementBuilder.ToString(), IsTerminated = isTerminated };
         }
 
         private static void RemoveBetween(StringBuilder statementBuilder, char key, int bufferIndex)
@@ -260,44 +320,48 @@ namespace Shiny.Repl
                 return null;
             }
 
-            VariableResolver resolver = new VariableResolver();
+            VariableAndContextResolver resolver = new VariableAndContextResolver();
 
             var tokens = tokenizer.Tokenize(statement);
             var ast = parser.Parse(tokens);
-            var variables = resolver.Resolve(ast);
-            var vars = evaluator.GetVariables();
 
-            foreach (var resolved in variables)
+            if (resolver.Resolve(ast, printer, out var variables))
             {
-                //
-                // Check if we have already resolved this variable.
-                // If we did then don't ask for value, we are good.
-                //
-                if (vars.ContainsKey(resolved.Key))
-                    continue;
+                var vars = evaluator.GetVariables();
 
-                var nestedPrompt = $">>  {resolved.Key} = ";
-
-                var stmt = ProcessKeyEvents(nestedPrompt);
-                var value = Evaluate(stmt, nestedPrompt);
-
-                printer.Print(new Run() { Text = "    --------", Color = RunColor.White });
-                var existing = variables[resolved.Key];
-
-                if(value == null)
+                foreach (var resolved in variables)
                 {
-                    printer.Print(Run.Red($"Variable '{resolved.Key}' needs a value"));
-                    return new EvaluatorState();
+                    //
+                    // Check if we have already resolved this variable.
+                    // If we did then don't ask for value, we are good.
+                    //
+                    if (vars.ContainsKey(resolved.Key))
+                        continue;
+
+                    var nestedPrompt = $">>  {resolved.Key} = ";
+
+                    var stmt = ProcessKeyEvents(nestedPrompt, '\r');
+                    var value = Evaluate(stmt.Statement, nestedPrompt);
+
+                    printer.Print(new Run() { Text = "    --------", Color = RunColor.White });
+                    var existing = variables[resolved.Key];
+
+                    if (value == null)
+                    {
+                        printer.Print(Run.Red($"Variable '{resolved.Key}' needs a value"));
+                        return new EvaluatorState();
+                    }
+
+                    existing.IsSigned = value.IsSigned;
+                    existing.Type = value.Type;
+                    existing.Value = value.Value;
                 }
 
-                existing.IsSigned = value.IsSigned;
-                existing.Type = value.Type;
-                existing.Value = value.Value;
+                var result = evaluator.Evaluate(ast, variables, printer, context);
+                return result;
             }
 
-            var result = evaluator.Evaluate(ast, variables, printer, context);
-            return result;
-
+            return new EvaluatorState();
         }
 
         private static string PrintLogo()
@@ -308,6 +372,12 @@ namespace Shiny.Repl
  \__ \ ' \| | ' \ || | | (__/ _` | / _| || | / _` |  _/ _ \ '_|
  |___/_||_|_|_||_\_, |  \___\__,_|_\__|\_,_|_\__,_|\__\___/_|  
                  |__/                                          ";
+        }
+
+        public class KeyBuffer
+        {
+            public string Statement { get; set; }
+            public bool IsTerminated { get; set; }
         }
     }
 }

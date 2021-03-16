@@ -10,6 +10,8 @@ namespace Shiny.Calculator.Evaluation
         public LiteralType Type;
         public string Value;
         public bool IsSigned;
-        public bool IsResolved;
+
+        public static EvaluatorState Empty() { return new EvaluatorState(); }
     }
+
 }

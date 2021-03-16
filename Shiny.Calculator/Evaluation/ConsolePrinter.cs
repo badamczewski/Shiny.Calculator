@@ -92,6 +92,9 @@ namespace Shiny.Calculator.Evaluation
 
         public static Run Blue(string text)
             => new Run() { Text = text, Color = RunColor.Blue };
+
+        public static Run Yellow(string text)
+            => new Run() { Text = text, Color = RunColor.Yellow };
     }
 
     public class ConsolePrinter : IPrinter
