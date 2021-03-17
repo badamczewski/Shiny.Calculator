@@ -13,8 +13,9 @@ namespace Shiny.Repl
 {
     class Program
     {
-        private static char[] operators = new char[] { '+', '-', '/', '*', '^', '%', '~', '|', '&', '>', '<' };
-        private static string[] commands = new string[] { "cls", "parse", "explain", "explain_on", "explain_off", "code", "help", "regs", "mem" };
+        private static char[] operatorGlyphs = new char[]   { '+', '-', '/', '*', '^', '%', '~', '|', '&', '>', '<' };
+        private static string[] operators    = new string[] { "+", "-", "/", "*", "^", "%", "~", "|", "&", ">>", "<<", ">>>" };
+        private static string[] commands     = new string[] { "cls", "parse", "explain", "explain_on", "explain_off", "code", "help", "regs", "mem" };
         private static string[] instructions = new string[] { "mov", "add", "sub", "mul", "div", "shr", "shl" };
         private static string[] history = new string[64];
         private static int historyIndex = 0;
@@ -22,7 +23,7 @@ namespace Shiny.Repl
 
         private static EvaluatorContext context = new EvaluatorContext();
         private static Tokenizer tokenizer = new Tokenizer();
-        private static Parser parser = new Parser(commands, instructions);
+        private static Parser parser = new Parser(commands, operators, instructions);
         private static Evaluator evaluator = new Evaluator();
         private static ConsolePrinter printer = new ConsolePrinter();
 
@@ -89,7 +90,7 @@ namespace Shiny.Repl
 
         static void Colorize(char keyChar)
         {
-            if (operators.Contains(keyChar))
+            if (operatorGlyphs.Contains(keyChar))
             {
                 Console.SetCursorPosition(Console.CursorLeft, Console.CursorTop);
                 ConsoleUtils.Write(ConsoleColor.Red, keyChar.ToString());

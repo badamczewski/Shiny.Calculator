@@ -42,6 +42,10 @@ namespace Shiny.Calculator.Evaluation
                 foreach (var error in syntaxTree.Errors)
                 { 
                     printer.Print();
+
+                    printer.Print(Run.Red($"{promptOffset}Error: {error.ErrorMessage}"));
+                    printer.Print();
+
                     printer.PrintInline(Run.White(promptOffset));
 
                     if (error.SurroundingTokens != null)
@@ -50,25 +54,37 @@ namespace Shiny.Calculator.Evaluation
                         foreach (var token in error.SurroundingTokens)
                         {
                             //
-                            // Calculate the marker size based on the faulty token length.
-                            //
-                            if (token.Position == error.Possition)
-                                marker = new string('^', token.GetValue().Length);
-
-                            //
                             // Since our lexer/tokenizer discards withespaces, we can
                             // compute where each token starts and fill the rest with empty
                             // space.
                             //
                             var pad = new string(' ', token.Position - prevLength);
-                            printer.PrintInline(Run.White(pad + token.GetValue()));
+
+                            //
+                            // Calculate the marker size based on the faulty token length.
+                            //
+                            if (token.Position == error.Possition)
+                            {
+                                marker = new string('^', token.GetValue().Length);
+                                printer.PrintInline(Run.Yellow(pad + token.GetValue()));
+
+                            }
+                            else
+                            {
+                                printer.PrintInline(Run.White(pad + token.GetValue()));
+                            }
 
                             prevLength = token.Position + token.GetValue().Length;
                         }
                     }
                     printer.Print();
                     printer.Print(Run.Yellow(new string(' ', 4 + error.Possition) + marker));
-                    printer.Print(Run.Red($"{promptOffset}{error.Message}"));
+
+                    if (string.IsNullOrWhiteSpace(error.HelpMessage) == false)
+                    {
+                        printer.Print(Run.Yellow($"{promptOffset}Hint: {error.HelpMessage}"));
+                    }
+
                     printer.Print(Run.Yellow($"{promptOffset}@ line:{error.Line} pos:{error.Possition}"));
                 }
             }

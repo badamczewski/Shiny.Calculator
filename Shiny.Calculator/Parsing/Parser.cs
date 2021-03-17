@@ -13,11 +13,13 @@ namespace Shiny.Repl.Parsing
         private List<Token> tokens;
         private string[] commands;
         private string[] instructions;
+        private string[] operators;
 
-        public Parser(string[] commands, string[] instructions)
+        public Parser(string[] commands, string[] operators, string[] instructions)
         {
             this.commands = commands;
             this.instructions = instructions;
+            this.operators = operators;
         }
 
         public AST Parse(List<Token> tokens)
@@ -73,13 +75,20 @@ namespace Shiny.Repl.Parsing
             { 
                 Identifier = tokens[i].GetValue() 
             };
-
             //
             // Shoud be equals operator.
             //
             Move(ref i);
+            //
             // Move to the acutal assigment.
-            Move(ref i);
+            //
+            var wasLast = Move(ref i);
+            //
+            // Check for empty assigment.
+            //
+            if (wasLast)
+                ParsingError("Invalid or empty assigment.", "Block, expression or value recquired.", i - 1);
+
             //
             // Check if this is a block assigment or just a binary expression. 
             //
@@ -98,7 +107,10 @@ namespace Shiny.Repl.Parsing
                         Assigment = new PartialBlockExpression()
                     };
                 }
-
+                //
+                // @TODO: BLocks are still not implemented so this is just a dumb
+                // placeholder.
+                //
                 return new BlockExpression();
             }
             else
@@ -319,15 +331,9 @@ namespace Shiny.Repl.Parsing
                 {
                     var @operator = (OperatorToken)token;
 
-                    //
-                    // Validate if the next token is a valid one.
-                    //
-                    if (IsOperator(i + 1))
-                        ParsingError("Expected literal or variable, but got operator.", i + 1);
+                    var isValid = ValidateBinaryExpressionOperator(@operator, i);
 
-
-
-                    //
+                    // 
                     // Check if we should descent deeper, if the operator has a
                     // higher level value we simply call parse binary again.
                     //
@@ -344,7 +350,7 @@ namespace Shiny.Repl.Parsing
                         // This could be improved by explicit itteration control 
                         // but it's not needed for now.
                         //
-                        i--;
+                        if (isValid) i--;
                         return left;
                     }
                 }
@@ -392,6 +398,41 @@ namespace Shiny.Repl.Parsing
             }
 
             return left;
+        }
+  
+        private bool ValidateBinaryExpressionOperator(OperatorToken @operator, int i)
+        {
+            var isValid = true;
+            //
+            // Check if this operator is even valid.
+            // IDEA: We could do it on the tokenization level, but for now
+            // let's push this to the parser.
+            //
+            if (operators.Contains(@operator.GetValue()) == false)
+            {
+                ParsingError("Invalid operator.", $"Supported Operators are: ({string.Join(", ", operators)})", i);
+                isValid = false;
+            }
+
+            //
+            // Cannot end on operator.
+            //
+            if (IsLastToken(i))
+            {
+                ParsingError("Operator cannot end the expression.", i);
+                isValid = false;
+            }
+
+            //
+            // Validate if the next token is a valid one.
+            //
+            if (IsOperator(i + 1) && (IsLiteralWithOperator(i + 1) == false && IsParrenWithOperator(i + 1) == false))
+            {
+                ParsingError("Expected literal or variable, but got operator.", i + 1);
+                isValid = false;
+            }
+
+            return isValid;
         }
 
         private AST_Node ParseLiteralsAndIdentifiers(ref int i)
@@ -450,18 +491,10 @@ namespace Shiny.Repl.Parsing
             return ParsingError("Incorrect sub-expression.", i);
         }
 
-        private int Move(ref int i, Predicate<int> assert = null)
+        private bool Move(ref int i)
         {
             i++;
-            if (assert != null)
-            {
-                if (assert(i) == false)
-                {
-                    throw new ArgumentException($"Expected: {assert.Method}");
-                }
-            }
-
-            return i;
+            return (i < tokens.Count) == false;
         }
 
         private bool IsOperator(int tokenIndex)
@@ -623,7 +656,11 @@ namespace Shiny.Repl.Parsing
 
         private bool IsLiteralsOrVars(int tokenIndex)
         {
-            return IsNumber(tokenIndex) || IsText(tokenIndex) || IsWord(tokenIndex) || IsBool(tokenIndex);
+            return  IsNumber(tokenIndex) ||
+                    IsText(tokenIndex) ||
+                    IsWord(tokenIndex) ||
+                    IsBool(tokenIndex) ||
+                    IsLiteralWithOperator(tokenIndex);
         }
 
         private bool IsLiteralsOrVarsOrIndexing(int tokenIndex)
@@ -758,7 +795,12 @@ namespace Shiny.Repl.Parsing
             return false;
         }
 
-        private AST_Node ParsingError(string message, int i)
+        private AST_Node ParsingError(string errorMessage, int i)
+        {
+            return ParsingError(errorMessage, null, i);
+        }
+
+        private AST_Node ParsingError(string errorMessage, string helpMessage, int i)
         {
             int line = -1;
             int pos  = -1;
@@ -773,9 +815,10 @@ namespace Shiny.Repl.Parsing
                 tokensOnTheSameLine = tokens.Where(x => x.Line == line).ToArray();
             }
 
-            var error =  new AST_Error() 
-            { 
-                Message = message, 
+            var error = new AST_Error()
+            {
+                ErrorMessage = errorMessage,
+                HelpMessage = helpMessage,
                 Line = line, Possition = pos, 
                 SurroundingTokens = tokensOnTheSameLine 
             };
@@ -813,7 +856,8 @@ namespace Shiny.Repl.Parsing
 
     public class AST_Error : AST_Node
     {
-        public string Message { get; set; }
+        public string ErrorMessage { get; set; }
+        public string HelpMessage { get; set; }
         public Token[] SurroundingTokens { get; set; }
     }
 

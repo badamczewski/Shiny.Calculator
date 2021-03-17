@@ -102,7 +102,7 @@ namespace Shiny.Calculator.Evaluation
             //
             if(expression is AST_Error error)
             {
-                printer.Print(Run.Red($" L:{error.Line} P:{error.Possition} {error.Message}"));
+                printer.Print(Run.Red($" L:{error.Line} P:{error.Possition} {error.ErrorMessage}"));
                 return new EvaluatorState();
             }
 
