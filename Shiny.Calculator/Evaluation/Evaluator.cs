@@ -57,8 +57,17 @@ namespace Shiny.Calculator.Evaluation
 
             if (result.Type == LiteralType.Number && result.Value != null)
             {
-                printer.Print(new Run() { Text = "    =", Color = RunColor.Red });
+                printer.Print(new Run() { Text = "=", Color = RunColor.Red });
                 PrintAsBitSet((int)long.Parse(result.Value));
+            }
+            else if(result.Type == LiteralType.Text && result.Value != null)
+            {
+                printer.Print(new Run() { Text = "=", Color = RunColor.Red });
+                PrintAsText(result.Value);
+
+                var resultAsNumber = ConvertToNumber(result);
+
+                PrintAsBitSet((int)long.Parse(resultAsNumber.Value));
             }
 
             return result;
@@ -191,8 +200,18 @@ namespace Shiny.Calculator.Evaluation
                 {
                     foreach(var register in registers)
                     {
-                        printer.PrintInline(Run.White("    " + register.Key + " :"));
+                        printer.PrintInline(Run.White(register.Key + " :"));
                         PrintAsBitSet((int)long.Parse(register.Value.Value));
+                    }
+
+                    return new EvaluatorState();
+                }
+                else if (commandExpression.CommandName == "vars")
+                {
+                    foreach (var variable in variables)
+                    {
+                        printer.PrintInline(Run.White(variable.Key + " :"));
+                        PrintAsBitSet((int)long.Parse(variable.Value.Value));
                     }
 
                     return new EvaluatorState();
@@ -204,10 +223,24 @@ namespace Shiny.Calculator.Evaluation
                     {
                         var value = heap.Read(i * 4);
 
-                        printer.PrintInline(Run.White("    " + i + " :"));
+                        printer.PrintInline(Run.White(i + " :"));
                         PrintAsBitSet(value);
                     }
 
+                    return new EvaluatorState();
+                }
+                else if (commandExpression.CommandName == "result")
+                {
+                    if(commandExpression.RightHandSide != null)
+                    {
+
+                    }
+                    else
+                    {
+                        ///printer.Print(Run.White());
+                    }
+
+             
                     return new EvaluatorState();
                 }
 
@@ -628,11 +661,46 @@ namespace Shiny.Calculator.Evaluation
                 printer.Print(new Run() { Text = "    " + "````````", Color = RunColor.White });
             }
 
+            //
+            // For text operations if we have a (Any | Number) pair,
+            // We're going to convert it to number.
+            //
+            if (lhs.Type != LiteralType.Number || rhs.Type != LiteralType.Number)
+            {
+                if (lhs.Type != LiteralType.Number)
+                    lhs = ConvertToNumber(lhs);
+
+                if (rhs.Type != LiteralType.Number)
+                    rhs = ConvertToNumber(rhs);
+            }
+
             var result = EvalBinaryAsNumber(@operator, lhs, rhs);
 
             return new EvaluatorState() { IsSigned = lhs.IsSigned, Type = lhs.Type, Value = result.ToString() };
         }
 
+        private EvaluatorState ConvertToNumber(EvaluatorState state)
+        {
+            if (state.Type == LiteralType.Text)
+            {
+                return new EvaluatorState() { 
+                    Type = LiteralType.Number,
+                    Value = ((int)state.Value[0]).ToString(), 
+                    IsSigned = true 
+                };
+            }
+            else if(state.Type == LiteralType.Bool)
+            {
+                return new EvaluatorState()
+                {
+                    Type = LiteralType.Number,
+                    Value = state.Value == "true" ? "1" : "0",
+                    IsSigned = false
+                };
+            }
+
+            return new EvaluatorState();
+        }
 
         private long EvalBinaryAsNumber(string op, EvaluatorState lhs, EvaluatorState rhs)
         {
@@ -682,25 +750,25 @@ namespace Shiny.Calculator.Evaluation
             throw new ArgumentException("Invalid Operator");
         }
 
+        private void PrintAsText(string value)
+        {
+            printer.Print(new Run() { Text = $"\"{value}\"", Color = (RunColor)(int)Console.ForegroundColor });
+        }
+
         private void PrintAsBitSet(int value)
         {
             int maxOffset = 5;
             var val = value.ToString();
-            string pad = "   ";
             int len = val.Length;
 
-            if (value >= 0)
-            {
-                pad += " ";
-            }
-            else
+            if (value < 0)
             {
                 len--;
             }
 
             List<Run> runs = new List<Run>();
 
-            string valueToPrint = pad + value.ToString() + new string(' ', Math.Abs(maxOffset - len)) + " => ";
+            string valueToPrint = value.ToString() + new string(' ', Math.Abs(maxOffset - len)) + " => ";
             runs.Add(new Run() { Text = valueToPrint, Color = (RunColor)(int)Console.ForegroundColor });
 
             for (int b = 31; b >= 0; b--)

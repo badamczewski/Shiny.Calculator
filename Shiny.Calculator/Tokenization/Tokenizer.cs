@@ -23,93 +23,93 @@ namespace Shiny.Repl.Tokenization
 
             int line = 1;
             int offset = 0;
-            int i = 0;
+            int index = 0;
 
-            while (i < input.Length)
+            while (index < input.Length)
             {
-                var c = input.Span[i];
+                var c = input.Span[index];
 
                 if (c == newLineChar)
                 {
-                    tokens.Add(new EOSToken() { Line = line, Position = offset, Input = input.Slice(i, 1) });
+                    tokens.Add(new Token(TokenKind.EOS) { Line = line, Position = offset, Input = input.Slice(index, 1) });
 
-                    i++;
+                    index++;
                     line++;
                     offset = 0;
                 }
-                else if (IsColon(i))
+                else if (IsColon(index))
                 {
-                    var colon = ParseColon(ref i, ref line, ref offset);
+                    var colon = ParseColon(ref index, ref line, ref offset);
                     tokens.Add(colon);
                 }
                 else if (char.IsDigit(c))
                 {
-                    var number = ParseNumber(ref i, ref line, ref offset);
+                    var number = ParseNumber(ref index, ref line, ref offset);
                     tokens.Add(number);
                 }
-                else if (IsCommand(i))
+                else if (IsCommand(index))
                 {
-                    var command = ParseCommand(ref i, ref line, ref offset);
+                    var command = ParseCommand(ref index, ref line, ref offset);
                     tokens.Add(command);
                 }
-                else if (IsDot(i) && IsDot(i + 1))
+                else if (IsDot(index) && IsDot(index + 1))
                 {
-                    var range = ParseRange(ref i, ref line, ref offset);
+                    var range = ParseRange(ref index, ref line, ref offset);
                     tokens.Add(range);
                 }
-                else if (IsComment(i) && IsComment(i + 1))
+                else if (IsComment(index) && IsComment(index + 1))
                 {
-                    var comment = ParseComment(ref i, ref line, ref offset);
+                    var comment = ParseComment(ref index, ref line, ref offset);
                     tokens.Add(comment);
                 }
-                else if (IsDot(i))
+                else if (IsDot(index))
                 {
-                    var dot = ParseDot(ref i, ref line, ref offset);
+                    var dot = ParseDot(ref index, ref line, ref offset);
                     tokens.Add(dot);
                 }
-                else if (IsBinaryOperator(i))
+                else if (IsBinaryOperator(index))
                 {
-                    var @operator = ParseBinaryOperator(ref i, ref line, ref offset);
+                    var @operator = ParseBinaryOperator(ref index, ref line, ref offset);
                     tokens.Add(@operator);
                 }
-                else if (IsChar(i, '=') && (IsBinaryOperator(i + 1) || IsChar(i + 1, '=')))
+                else if (IsChar(index, '=') && (IsBinaryOperator(index + 1) || IsChar(index + 1, '=')))
                 {
-                    var @operator = ParseBinaryOperator(ref i, ref line, ref offset);
+                    var @operator = ParseBinaryOperator(ref index, ref line, ref offset);
                     tokens.Add(@operator);
                 }
-                else if (IsOperator(i))
+                else if (IsOperator(index))
                 {
-                    var @operator = ParseOperator(ref i, ref line, ref offset);
+                    var @operator = ParseOperator(ref index, ref line, ref offset);
                     tokens.Add(@operator);
                 }
-                else if (IsBlockOpen(i))
+                else if (IsBlockOpen(index))
                 {
-                    var block = ParseBlockOpen(ref i, ref line, ref offset);
+                    var block = ParseBlockOpen(ref index, ref line, ref offset);
                     tokens.Add(block);
                 }
-                else if (IsBlockClose(i))
+                else if (IsBlockClose(index))
                 {
-                    var block = ParseBlockClose(ref i, ref line, ref offset);
+                    var block = ParseBlockClose(ref index, ref line, ref offset);
                     tokens.Add(block);
                 }
                 else if (IsBracketOpen(c))
                 {
-                    var bracket = ParseBracketOpen(ref i, ref line, ref offset);
+                    var bracket = ParseBracketOpen(ref index, ref line, ref offset);
                     tokens.Add(bracket);
                 }
                 else if (IsBracketClose(c))
                 {
-                    var bracket = ParseBracketClose(ref i, ref line, ref offset);
+                    var bracket = ParseBracketClose(ref index, ref line, ref offset);
                     tokens.Add(bracket);
                 }
                 else if (IsSeparator(c))
                 {
-                    var separator = ParseSeparator(ref i, ref line, ref offset);
+                    var separator = ParseSeparator(ref index, ref line, ref offset);
                     tokens.Add(separator);
                 }
                 else if (char.IsLetter(c))
                 {
-                    var word = ParseKeywordOrVar(ref i, ref line, ref offset);
+                    var word = ParseKeywordOrVar(ref index, ref line, ref offset);
                     tokens.Add(word);
                 }
                 else if (IsQuote(c))
@@ -117,21 +117,21 @@ namespace Shiny.Repl.Tokenization
                     //
                     // Move since this symbol is the Quote.
                     //
-                    i++;
-                    var text = ParseText(ref i, c, ref line, ref offset);
+                    index++;
+                    var text = ParseText(ref index, c, ref line, ref offset);
                     tokens.Add(text);
-                    i++;
+                    index++;
 
                     offset += 2;
                 }
                 else if (IsEOF(c))
                 {
-                    var eof = ParseEndOfStatement(ref i, ref line, ref offset);
+                    var eof = ParseEndOfStatement(ref index, ref line, ref offset);
                     tokens.Add(eof);
                 }
                 else
                 {
-                    i++;
+                    index++;
                     offset++;
                 }
             }
@@ -263,9 +263,9 @@ namespace Shiny.Repl.Tokenization
             return c == '(' || c == '[';
         }
 
-        private EOSToken ParseEndOfStatement(ref int i, ref int line, ref int offset)
+        private Token ParseEndOfStatement(ref int i, ref int line, ref int offset)
         {
-            var eos = new EOSToken() { Input = input.Slice(i, 1), Line = line, Position = offset };
+            var eos = new Token(TokenKind.EOS) { Input = input.Slice(i, 1), Line = line, Position = offset };
 
             i++;
             offset++;
@@ -273,9 +273,9 @@ namespace Shiny.Repl.Tokenization
             return eos;
         }
 
-        private BlockOpenToken ParseBlockOpen(ref int i, ref int line, ref int offset)
+        private Token ParseBlockOpen(ref int i, ref int line, ref int offset)
         {
-            var block = new BlockOpenToken() { Input = input.Slice(i, 1), Line = line, Position = offset };
+            var block = new Token(TokenKind.BlockOpen) { Input = input.Slice(i, 1), Line = line, Position = offset };
 
             i++;
             offset++;
@@ -283,9 +283,9 @@ namespace Shiny.Repl.Tokenization
             return block;
         }
 
-        private BlockCloseToken ParseBlockClose(ref int i, ref int line, ref int offset)
+        private Token ParseBlockClose(ref int i, ref int line, ref int offset)
         {
-            var block = new BlockCloseToken() { Input = input.Slice(i, 1), Line = line, Position = offset };
+            var block = new Token(TokenKind.BlockClose) { Input = input.Slice(i, 1), Line = line, Position = offset };
 
             i++;
             offset++;
@@ -293,9 +293,9 @@ namespace Shiny.Repl.Tokenization
             return block;
         }
 
-        private SeparatorToken ParseSeparator(ref int i, ref int line, ref int offset)
+        private Token ParseSeparator(ref int i, ref int line, ref int offset)
         {
-            var separator = new SeparatorToken() { Input = input.Slice(i, 1), Line = line, Position = offset };
+            var separator = new Token(TokenKind.Separator) { Input = input.Slice(i, 1), Line = line, Position = offset };
 
             i++;
             offset++;
@@ -303,9 +303,9 @@ namespace Shiny.Repl.Tokenization
             return separator;
         }
 
-        private BracketOpenToken ParseBracketOpen(ref int i, ref int line, ref int offset)
+        private Token ParseBracketOpen(ref int i, ref int line, ref int offset)
         {
-            var bracket = new BracketOpenToken() { Input = input.Slice(i, 1), Line = line, Position = offset };
+            var bracket = new Token(TokenKind.BracketOpen) { Input = input.Slice(i, 1), Line = line, Position = offset };
 
             i++;
             offset++;
@@ -313,9 +313,9 @@ namespace Shiny.Repl.Tokenization
             return bracket;
         }
 
-        private BracketCloseToken ParseBracketClose(ref int i, ref int line, ref int offset)
+        private Token ParseBracketClose(ref int i, ref int line, ref int offset)
         {
-            var bracket = new BracketCloseToken() { Input = input.Slice(i, 1), Line = line, Position = offset };
+            var bracket = new Token(TokenKind.BracketClose) { Input = input.Slice(i, 1), Line = line, Position = offset };
 
             i++;
             offset++;
@@ -323,9 +323,9 @@ namespace Shiny.Repl.Tokenization
             return bracket;
         }
 
-        private DotToken ParseDot(ref int i, ref int line, ref int offset)
+        private Token ParseDot(ref int i, ref int line, ref int offset)
         {
-            var dot = new DotToken() { Input = input.Slice(i, 1), Line = line, Position = offset };
+            var dot = new Token(TokenKind.Dot) { Input = input.Slice(i, 1), Line = line, Position = offset };
 
             i++;
             offset++;
@@ -333,9 +333,9 @@ namespace Shiny.Repl.Tokenization
             return dot;
         }
 
-        private ColonToken ParseColon(ref int i, ref int line, ref int offset)
+        private Token ParseColon(ref int i, ref int line, ref int offset)
         {
-            var colon = new ColonToken() { Input = input.Slice(i, 1), Line = line, Position = offset };
+            var colon = new Token(TokenKind.Colon) { Input = input.Slice(i, 1), Line = line, Position = offset };
 
             i++;
             offset++;
@@ -344,7 +344,7 @@ namespace Shiny.Repl.Tokenization
         }
 
 
-        private CommentToken ParseComment(ref int i, ref int line, ref int position)
+        private Token ParseComment(ref int i, ref int line, ref int position)
         {
             int start = i;
             int startPosition = position;
@@ -360,11 +360,11 @@ namespace Shiny.Repl.Tokenization
                 position++;
             }
 
-            var result = new CommentToken() { Input = input.Slice(start, i - start), Line = line, Position = startPosition };
+            var result = new Token(TokenKind.Comment) { Input = input.Slice(start, i - start), Line = line, Position = startPosition };
             return result;
         }
 
-        private TextToken ParseText(ref int i, char enterQuote, ref int line, ref int position)
+        private Token ParseText(ref int i, char enterQuote, ref int line, ref int position)
         {
             int start = i;
             int startPosition = position;
@@ -383,11 +383,11 @@ namespace Shiny.Repl.Tokenization
                 position++;
             }
 
-            var result = new TextToken() { Input = input.Slice(start, i - start), Line = line, Position = startPosition };
+            var result = new Token(TokenKind.Text) { Input = input.Slice(start, i - start), Line = line, Position = startPosition };
             return result;
         }
 
-        private RangeToken ParseRange(ref int i, ref int line, ref int position)
+        private Token ParseRange(ref int i, ref int line, ref int position)
         {
             int start = i;
             int startPosition = position;
@@ -414,11 +414,11 @@ namespace Shiny.Repl.Tokenization
                 throw new ArgumentException($"Unexpected Token at: {i}");
             }
 
-            var result = new RangeToken() { Input = input.Slice(start, i - start), Line = line, Position = startPosition };
+            var result = new Token(TokenKind.Range) { Input = input.Slice(start, i - start), Line = line, Position = startPosition };
             return result;
         }
 
-        private CommandToken ParseCommand(ref int i, ref int line, ref int position)
+        private Token ParseCommand(ref int i, ref int line, ref int position)
         {
             int start = i;
             int startPosition = position;
@@ -437,11 +437,11 @@ namespace Shiny.Repl.Tokenization
             // A Command can have argumennts after it but it doesn't have to
             // so that's why when we expect EOF ';' we need to back up a char.
             //
-            var result = new CommandToken() { Input = input.Slice(start, i - start), Line = line, Position = startPosition };
+            var result = new Token(TokenKind.Command) { Input = input.Slice(start, i - start), Line = line, Position = startPosition };
             return result;
         }
 
-        private WordToken ParseKeywordOrVar(ref int i, ref int line, ref int position)
+        private Token ParseKeywordOrVar(ref int i, ref int line, ref int position)
         {
             int start = i;
             int startPosition = position;
@@ -461,11 +461,11 @@ namespace Shiny.Repl.Tokenization
                 position++;
             }
 
-            var result = new WordToken() { Input = input.Slice(start, i - start), Line = line, Position = startPosition };
+            var result = new Token(TokenKind.Word) { Input = input.Slice(start, i - start), Line = line, Position = startPosition };
             return result;
         }
 
-        private BinaryOperatorToken ParseBinaryOperator(ref int i, ref int line, ref int position)
+        private Token ParseBinaryOperator(ref int i, ref int line, ref int position)
         {
             int level = 0;
             int start = i;
@@ -502,7 +502,7 @@ namespace Shiny.Repl.Tokenization
             return result;
         }
 
-        private OperatorToken ParseOperator(ref int i, ref int line, ref int position)
+        private Token ParseOperator(ref int i, ref int line, ref int position)
         {
             int level = 0;
             int start = i;
@@ -588,17 +588,37 @@ namespace Shiny.Repl.Tokenization
         }
     }
 
+    public enum TokenKind
+    {
+        Number,
+        Word,
+        Separator,
+        Range,
+        Comment,
+        Text,
+        Colon,
+        Operator,
+        BinaryOperator,
+        EOS,
+        Dot,
+        BlockOpen,
+        BlockClose,
+        BracketOpen,
+        BracketClose,
+        Command
+    }
+
     public class Token
     {
-        public Token(string name)
+        public Token(TokenKind kind)
         {
-            TokenName = name;
+            Kind = kind;
         }
 
         public int Line { get; set; }
         public int Position { get; set; }
 
-        public string TokenName { get; set; }
+        public TokenKind Kind { get; set; }
         public ReadOnlyMemory<char> Input { get; set; }
 
         private string value;
@@ -612,90 +632,23 @@ namespace Shiny.Repl.Tokenization
         }
     }
 
-    public class RangeToken : Token
-    {
-        public RangeToken() : base("Range") { }
-    }
-
-    public class CommentToken : Token
-    {
-        public CommentToken() : base("Comment") { }
-    }
-
-    public class TextToken : Token
-    {
-        public TextToken() : base("Text") { }
-    }
-
-    public class WordToken : Token
-    {
-        public WordToken() : base("Word") { }
-    }
-
     public class NumberToken : Token
     {
         public char Format { get; set; }
         public bool IsSigned { get; set; }
-        public NumberToken() : base("Number") { }
+        public NumberToken() : base(TokenKind.Number) { }
     }
 
-    public class SeparatorToken : Token
-    {
-        public SeparatorToken() : base("Separator") { }
-    }
-
-    public class ColonToken : Token
-    {
-        public ColonToken() : base("Colon") { }
-    }
     public class OperatorToken : Token
     {
         public int Level { get; set; }
 
-        public OperatorToken() : base("Operator") { }
-
-        public OperatorToken(string specificOperator) : base(specificOperator) { }
+        public OperatorToken() : base(TokenKind.Operator) { }
+        public OperatorToken(TokenKind kind) : base(kind) { }
     }
 
     public class BinaryOperatorToken : OperatorToken
     {
-        public BinaryOperatorToken() : base("BinaryOperator") { }
-    }
-
-    public class EOSToken : Token
-    {
-        public EOSToken() : base("EOS") { }
-    }
-
-    public class DotToken : Token
-    {
-        public DotToken() : base("Dot") { }
-    }
-
-    public class BlockOpenToken : Token
-    {
-        public BlockOpenToken() : base("BlockOpen") { }
-    }
-
-    public class BlockCloseToken : Token
-    {
-        public BlockCloseToken() : base("BlockClose") { }
-    }
-
-    public class BracketOpenToken : Token
-    {
-        public string Bracket { get; set; }
-        public BracketOpenToken() : base("BracketOpen") { }
-    }
-
-    public class BracketCloseToken : Token
-    {
-        public string Bracket { get; set; }
-        public BracketCloseToken() : base("BracketClose") { }
-    }
-
-    public class CommandToken : Token
-    {
-        public CommandToken() : base("Command") { }
+        public BinaryOperatorToken() : base(TokenKind.BinaryOperator) { }
     }
 }

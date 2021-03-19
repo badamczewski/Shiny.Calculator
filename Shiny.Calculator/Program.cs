@@ -15,9 +15,9 @@ namespace Shiny.Repl
     {
         private static char[] operatorGlyphs = new char[]   { '+', '-', '/', '*', '^', '%', '~', '|', '&', '>', '<' };
         private static string[] operators    = new string[] { "+", "-", "/", "*", "^", "%", "~", "|", "&", ">>", "<<", ">>>" };
-        private static string[] commands     = new string[] { "cls", "parse", "explain", "explain_on", "explain_off", "code", "help", "regs", "mem" };
+        private static string[] commands     = new string[] { "cls", "parse", "explain", "explain_on", "explain_off", "code", "help", "regs", "vars", "mem", "result" };
         private static string[] instructions = new string[] { "mov", "add", "sub", "mul", "div", "shr", "shl" };
-        private static string[] history = new string[64];
+        private static string[] history      = new string[64];
         private static int historyIndex = 0;
         private static string prompt = ">>> ";
 
@@ -29,6 +29,7 @@ namespace Shiny.Repl
 
         static void Main(string[] args)
         {
+            Console.Clear();
             Console.WriteLine(PrintLogo());
 
             bool isMultiline = false;
@@ -312,8 +313,10 @@ namespace Shiny.Repl
             return -1;
         }
 
-        private static EvaluatorState Evaluate(string statement, string prompt)
-        {            
+        private static EvaluatorState Evaluate(string statement, string currentPrompt)
+        {
+            printer.Indent = prompt.Length;
+
             Console.WriteLine();
 
             if (string.IsNullOrWhiteSpace(statement))
@@ -344,7 +347,7 @@ namespace Shiny.Repl
                     var stmt = ProcessKeyEvents(nestedPrompt, '\r');
                     var value = Evaluate(stmt.Statement, nestedPrompt);
 
-                    printer.Print(new Run() { Text = "    --------", Color = RunColor.White });
+                    printer.Print(new Run() { Text = "--------", Color = RunColor.White });
                     var existing = variables[resolved.Key];
 
                     if (value == null)

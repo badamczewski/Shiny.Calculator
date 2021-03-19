@@ -37,16 +37,17 @@ namespace Shiny.Calculator.Evaluation
             //
             if (syntaxTree.Errors.Any())
             {
-                var promptOffset = new string(' ', 4);
+                List<Run> tokenRuns = new List<Run>();
+
                 string marker = "^";
                 foreach (var error in syntaxTree.Errors)
-                { 
+                {
+                    tokenRuns.Clear();
+
                     printer.Print();
 
-                    printer.Print(Run.Red($"{promptOffset}Error: {error.ErrorMessage}"));
+                    printer.Print(Run.Red($"Error: {error.ErrorMessage}"));
                     printer.Print();
-
-                    printer.PrintInline(Run.White(promptOffset));
 
                     if (error.SurroundingTokens != null)
                     {
@@ -66,26 +67,28 @@ namespace Shiny.Calculator.Evaluation
                             if (token.Position == error.Possition)
                             {
                                 marker = new string('^', token.GetValue().Length);
-                                printer.PrintInline(Run.Yellow(pad + token.GetValue()));
-
+                                tokenRuns.Add(Run.Yellow(pad + token.GetValue()));
                             }
                             else
                             {
-                                printer.PrintInline(Run.White(pad + token.GetValue()));
+                                tokenRuns.Add(Run.White(pad + token.GetValue()));
                             }
 
                             prevLength = token.Position + token.GetValue().Length;
                         }
                     }
+
+                    printer.PrintInline(tokenRuns.ToArray());
+
                     printer.Print();
-                    printer.Print(Run.Yellow(new string(' ', 4 + error.Possition) + marker));
+                    printer.Print(Run.Yellow(new string(' ', error.Possition) + marker));
 
                     if (string.IsNullOrWhiteSpace(error.HelpMessage) == false)
                     {
-                        printer.Print(Run.Yellow($"{promptOffset}Hint: {error.HelpMessage}"));
+                        printer.Print(Run.Yellow($"Hint: {error.HelpMessage}"));
                     }
 
-                    printer.Print(Run.Yellow($"{promptOffset}@ line:{error.Line} pos:{error.Possition}"));
+                    printer.Print(Run.Yellow($"@ line:{error.Line} pos:{error.Possition}"));
                 }
             }
         }

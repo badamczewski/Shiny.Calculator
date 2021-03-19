@@ -77,7 +77,7 @@ namespace Shiny.Repl.Parsing
             };
             //
             // Shoud be equals operator.
-            //
+            // This doesn't need to be checked since we already did when we entered this method.
             Move(ref i);
             //
             // Move to the acutal assigment.
@@ -88,7 +88,6 @@ namespace Shiny.Repl.Parsing
             //
             if (wasLast)
                 ParsingError("Invalid or empty assigment.", "Block, expression or value recquired.", i - 1);
-
             //
             // Check if this is a block assigment or just a binary expression. 
             //
@@ -199,7 +198,7 @@ namespace Shiny.Repl.Parsing
         private AST_Node ParseTwoArgInstruction(string name, ref int i)
         {
             if(IsLiteralsOrVarsOrIndexing(i + 1) == false)
-                return ParsingError("Missing instruction argument", i);
+                return ParsingError("Missing instruction arguments.", i);
 
             Move(ref i);
 
@@ -209,10 +208,10 @@ namespace Shiny.Repl.Parsing
             AST_Node dest = ParseInstructionArgument(ref i);
 
             if (IsComma(i + 1) == false && IsLiteralsOrVarsOrIndexing(i + 2))
-                return ParsingError("Missing second argument", i);
+                return ParsingError("Missing comma between arguments.", i);
 
             if (IsComma(i + 1) == false)
-                return ParsingError("Invalid argument (missing comma)", i);
+                return ParsingError("This instruction requires two arguments.", i);
 
             Move(ref i);
             Move(ref i);
@@ -499,48 +498,20 @@ namespace Shiny.Repl.Parsing
 
         private bool IsOperator(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "Operator" || token.TokenName == "BinaryOperator")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, TokenKind.Operator, TokenKind.BinaryOperator);
         }
 
         private bool IsParrenWithOperator(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if ((token.TokenName == "Operator" || token.TokenName == "BinaryOperator") &&
-                    (token.GetValue() == "-" || token.GetValue() == "~"))
-                {
-                    return IsOpenBracket(tokenIndex + 1);
-                }
-            }
+            if(Match(tokenIndex, (TokenKind.Operator, "-"), (TokenKind.BinaryOperator, "~")))
+                return IsOpenBracket(tokenIndex + 1);
 
             return false;
         }
 
         private bool IsEndOfStatement(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "EOS")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, TokenKind.EOS);
         }
 
         private bool IsLastToken(int tokenIndex)
@@ -550,135 +521,70 @@ namespace Shiny.Repl.Parsing
 
         private bool IsOpenBlock(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "BlockOpen" && token.GetValue() == "{")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, (TokenKind.BlockOpen, "{"));
         }
 
         private bool IsCloseBlock(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "BlockClose" && token.GetValue() == "}")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, (TokenKind.BlockClose, "}"));
         }
 
         private bool IsOpenBracket(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "BracketOpen" && token.GetValue() == "(")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, (TokenKind.BracketOpen, "("));
         }
 
         private bool IsCloseBracket(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "BracketClose" && token.GetValue() == ")")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, (TokenKind.BracketClose, ")"));
         }
 
         private bool IsLiteralWithOperator(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
+            if (Match(tokenIndex, (TokenKind.Operator, "-"), (TokenKind.BinaryOperator, "~")))
             {
-                var token = tokens[tokenIndex];
-
-                if ((token.TokenName == "Operator" || token.TokenName == "BinaryOperator") &&
-                    (token.GetValue() == "-" || token.GetValue() == "~"))
-                {
-                    return IsNumber(tokenIndex + 1) || IsWord(tokenIndex + 1);
-                }
+                return IsNumber(tokenIndex + 1) || IsWord(tokenIndex + 1);
             }
-
             return false;
         }
 
         private bool IsBool(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "Word" && (token.GetValue() == "true" || token.GetValue() == "false"))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, (TokenKind.Word, "true"), (TokenKind.Word, "false"));
         }
 
         private bool IsText(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "Text")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, TokenKind.Text);
         }
 
         private bool IsLiteralsOrVars(int tokenIndex)
         {
             return  IsNumber(tokenIndex) ||
-                    IsText(tokenIndex) ||
-                    IsWord(tokenIndex) ||
-                    IsBool(tokenIndex) ||
+                    IsText(tokenIndex)   ||
+                    IsWord(tokenIndex)   ||
+                    IsBool(tokenIndex)   ||
                     IsLiteralWithOperator(tokenIndex);
         }
 
         private bool IsLiteralsOrVarsOrIndexing(int tokenIndex)
         {
-            return IsNumber(tokenIndex) || IsText(tokenIndex) || IsWord(tokenIndex) || IsBool(tokenIndex) || IsIndexingAccessOpen(tokenIndex);
+            return IsNumber(tokenIndex) || 
+                   IsText(tokenIndex)   || 
+                   IsWord(tokenIndex)   || 
+                   IsBool(tokenIndex)   || 
+                   IsIndexingAccessOpen(tokenIndex);
         }
 
         private bool IsCommand(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
+            if (Match(tokenIndex, TokenKind.Word))
             {
                 var token = tokens[tokenIndex];
                 var value = token.GetValue();
 
-                if (token.TokenName == "Word" && commands.Contains(value))
-                {
+                if (commands.Contains(value))
                     return true;
-                }
             }
 
             return false;
@@ -686,112 +592,85 @@ namespace Shiny.Repl.Parsing
 
         private bool IsWord(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "Word")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, TokenKind.Word);
         }
 
         private bool IsComma(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "Separator" && token.GetValue() == ",")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, (TokenKind.Separator, ","));
         }
 
         private bool IsNumber(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "Number")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, TokenKind.Number);
         }
 
         private bool IsIndexingAccessOpen(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "BracketOpen")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, TokenKind.BracketOpen);
         }
 
         private bool IsIndexingAccessClose(int tokenIndex)
         {
-            if (tokenIndex < tokens.Count)
-            {
-                var token = tokens[tokenIndex];
-
-                if (token.TokenName == "BracketClose")
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Match(tokenIndex, TokenKind.BracketClose);
         }
 
         private bool IsVariableAssigmnent(int tokenIndex)
         {
-            if (tokenIndex + 1 < tokens.Count)
+            return Match(tokenIndex, TokenKind.Word) &&
+                   Match(tokenIndex + 1, (TokenKind.Operator, "="));
+        }
+
+        private bool IsInstruction(int tokenIndex)
+        {
+            if (Match(tokenIndex, TokenKind.Word))
             {
                 var token = tokens[tokenIndex];
                 var value = token.GetValue();
 
-                var nextToken = tokens[tokenIndex + 1];
-
-                if (token.TokenName == "Word" && 
-                    nextToken.TokenName == "Operator" && nextToken.GetValue() == "=")
-                {
+                if (instructions.Contains(value))
                     return true;
-                }
             }
 
             return false;
         }
 
-
-        private bool IsInstruction(int tokenIndex)
+        private bool Match(int tokenIndex, params TokenKind[] kinds)
         {
             if (tokenIndex < tokens.Count)
             {
                 var token = tokens[tokenIndex];
-                var value = token.GetValue();
 
-                if (token.TokenName == "Word" && instructions.Contains(value))
+                foreach (var kind in kinds)
                 {
-                    return true;
+                    if (token.Kind == kind)
+                        return true;
                 }
-            }
 
+                return false;
+            }
+            return false;
+        }
+
+        private bool Match(int tokenIndex, params (TokenKind kind, string value)[] matches)
+        {
+            if (tokenIndex < tokens.Count)
+            {
+                var token = tokens[tokenIndex];
+                bool kindMatch = false, valueMatch = false;
+
+                foreach (var match in matches)
+                {
+                    if (token.Kind == match.kind)
+                        kindMatch = true;
+                    if (token.GetValue() == match.value)
+                        valueMatch = true;
+
+                    if (kindMatch && valueMatch) return true;
+                }
+
+                return false;
+            }
             return false;
         }
 
