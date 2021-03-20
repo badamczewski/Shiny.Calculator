@@ -29,3 +29,6 @@
 /Shiny.Calculator/obj
 /.vs/Shiny.Calculator
 /Shiny.Calculator/bin
+/src/bin
+/src/obj
+/src/.vs/Shiny.Calculator/v16

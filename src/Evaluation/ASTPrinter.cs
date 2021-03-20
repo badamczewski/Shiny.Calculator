@@ -41,12 +41,8 @@ namespace Shiny.Calculator.Evaluation
                 EvaluateIdentifierExpression(identifierExpression);
                 return;
             }
-            else if (expression is CommandExpression commandExpression)
-            {
-                return;
-            }
 
-            throw new ArgumentException($"Invalid Expression: '{expression.ToString()}'");
+            _printer.Print(Run.Yellow($"???-{expression.Name}"));
         }
 
         private EvaluatorState EvaluateIdentifierExpression(IdentifierExpression identifierExpression)

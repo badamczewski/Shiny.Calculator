@@ -30,8 +30,8 @@ namespace Shiny.Calculator.Parsing
             try
             {
                 this.tokens = tokens;
-                int i = 0;
-                var stmt = ParseStatement(ref i);
+                int index = 0;
+                var stmt = ParseStatement(ref index);
                 syntaxTree.Root = stmt;
                 syntaxTree.Errors = errors;
 
@@ -44,61 +44,61 @@ namespace Shiny.Calculator.Parsing
             }
         }
 
-        public AST_Node ParseStatement(ref int i)
+        public AST_Node ParseStatement(ref int index)
         {
-            if (IsCommand(i))
+            if (IsCommand(index))
             {
-                return ParseCommand(ref i);
+                return ParseCommand(ref index);
             }
-            else if (IsInstruction(i))
+            else if (IsInstruction(index))
             {
-                return ParseInstruction(ref i);
+                return ParseInstruction(ref index);
             }
-            else if(IsVariableAssigmnent(i))
+            else if(IsVariableAssigmnent(index))
             {
-                return ParseVariableAssigment(ref i);
+                return ParseVariableAssigment(ref index);
             }
-            else if(IsLiteralsOrVars(i))
+            else if(IsLiteralsOrVars(index) || IsOpenBracket(index) || IsParrenWithOperator(index))
             {
-                return ParseBinaryExpression(ref i, 0);
+                return ParseBinaryExpression(ref index, 0);
             }
 
-            return ParsingError("Unknown statement", i);
+            return ParsingError("Unknown statement", index);
         }
 
-        private AST_Node ParseVariableAssigment(ref int i)
+        private AST_Node ParseVariableAssigment(ref int index)
         {
             //
             // Create the identifier.
             // 
             var variable = new IdentifierExpression() 
             { 
-                Identifier = tokens[i].GetValue() 
+                Identifier = tokens[index].GetValue() 
             };
             //
             // Shoud be equals operator.
             // This doesn't need to be checked since we already did when we entered this method.
-            Move(ref i);
+            Move(ref index);
             //
             // Move to the acutal assigment.
             //
-            var wasLast = Move(ref i);
+            var wasLast = Move(ref index);
             //
             // Check for empty assigment.
             //
             if (wasLast)
-                ParsingError("Invalid or empty assigment.", "Block, expression or value recquired.", i - 1);
+                ParsingError("Invalid or empty assigment.", "Block, expression or value recquired.", index - 1);
             //
             // Check if this is a block assigment or just a binary expression. 
             //
-            if (IsOpenBlock(i))
+            if (IsOpenBlock(index))
             {
                 //
                 // Create a partial block that will let the caller know
                 // that we need to change to multiline mode and re-parse the entire
                 // program.
                 //
-                if(IsLastToken(i + 1))
+                if(IsLastToken(index + 1))
                 {
                     return new VariableAssigmentExpression()
                     {
@@ -107,14 +107,14 @@ namespace Shiny.Calculator.Parsing
                     };
                 }
                 //
-                // @TODO: BLocks are still not implemented so this is just a dumb
+                // @TODO: Blocks are still not implemented so this is just a dumb
                 // placeholder.
                 //
                 return new BlockExpression();
             }
             else
             {
-                var assigment = ParseBinaryExpression(ref i, 0);
+                var assigment = ParseBinaryExpression(ref index, 0);
                 return new VariableAssigmentExpression()
                 {
                     Identifier = variable,
@@ -123,52 +123,52 @@ namespace Shiny.Calculator.Parsing
             }
         }
 
-        private AST_Node ParseInstruction(ref int i)
+        private AST_Node ParseInstruction(ref int index)
         {
-            var name = tokens[i].GetValue().ToLower();
+            var name = tokens[index].GetValue().ToLower();
 
             if (name == "mov")
             {
-                return ParseTwoArgInstruction(name, ref i);
+                return ParseTwoArgInstruction(name, ref index);
             }
             else if (name == "add")
             {
-                return ParseTwoArgInstruction(name, ref i);
+                return ParseTwoArgInstruction(name, ref index);
             }
             else if (name == "sub")
             {
-                return ParseTwoArgInstruction(name, ref i);
+                return ParseTwoArgInstruction(name, ref index);
             }
             else if (name == "shl")
             {
-                return ParseTwoArgInstruction(name, ref i);
+                return ParseTwoArgInstruction(name, ref index);
             }
             else if (name == "shr")
             {
-                return ParseTwoArgInstruction(name, ref i);
+                return ParseTwoArgInstruction(name, ref index);
             }
             else if(name == "mul")
             {
-                return ParseSingleArgInstruction(name, ref i);
+                return ParseSingleArgInstruction(name, ref index);
             }
             else if (name == "div")
             {
-                return ParseSingleArgInstruction(name, ref i);
+                return ParseSingleArgInstruction(name, ref index);
             }
  
-            return ParsingError("Unknown assembly instruction", i);
+            return ParsingError("Unknown assembly instruction", index);
         }
 
-        private AST_Node ParseSingleArgInstruction(string name, ref int i)
+        private AST_Node ParseSingleArgInstruction(string name, ref int index)
         {
-            if (IsLiteralsOrVarsOrIndexing(i + 1) == false)
-                return ParsingError("Missing instruction arguments", i);
+            if (IsLiteralsOrVarsOrIndexing(index + 1) == false)
+                return ParsingError("Missing instruction arguments", index);
 
-            Move(ref i);
+            Move(ref index);
             //
             // INST A
             //
-            var source = ParseInstructionArgument(ref i);
+            var source = ParseInstructionArgument(ref index);
 
             return new UnaryASMInstruction()
             {
@@ -177,46 +177,46 @@ namespace Shiny.Calculator.Parsing
             };
         }
 
-        private AST_Node ParseInstructionArgument(ref int i)
+        private AST_Node ParseInstructionArgument(ref int index)
         {
-            if (IsIndexingAccessOpen(i))
+            if (IsIndexingAccessOpen(index))
             {
                 IndexingExpression indexing = new IndexingExpression()
                 {
-                    Expression = ParseBinaryExpression(ref i, 0, true)
+                    Expression = ParseBinaryExpression(ref index, 0, true)
                 };
                 return indexing;
             }
-            else if (IsLiteralsOrVars(i))
+            else if (IsLiteralsOrVars(index))
             {
-                return ParseLiteralsAndIdentifiers(ref i);
+                return ParseLiteralsAndIdentifiers(ref index);
             }
 
-            return ParsingError("Invalid instruction argument", i);
+            return ParsingError("Invalid instruction argument", index);
         }
 
-        private AST_Node ParseTwoArgInstruction(string name, ref int i)
+        private AST_Node ParseTwoArgInstruction(string name, ref int index)
         {
-            if(IsLiteralsOrVarsOrIndexing(i + 1) == false)
-                return ParsingError("Missing instruction arguments.", i);
+            if(IsLiteralsOrVarsOrIndexing(index + 1) == false)
+                return ParsingError("Missing instruction arguments.", index);
 
-            Move(ref i);
+            Move(ref index);
 
             //
             // INST A,B
             //
-            AST_Node dest = ParseInstructionArgument(ref i);
+            AST_Node dest = ParseInstructionArgument(ref index);
 
-            if (IsComma(i + 1) == false && IsLiteralsOrVarsOrIndexing(i + 2))
-                return ParsingError("Missing comma between arguments.", i);
+            if (IsComma(index + 1) == false && IsLiteralsOrVarsOrIndexing(index + 2))
+                return ParsingError("Missing comma between arguments.", index);
 
-            if (IsComma(i + 1) == false)
-                return ParsingError("This instruction requires two arguments.", i);
+            if (IsComma(index + 1) == false)
+                return ParsingError("This instruction requires two arguments.", index);
 
-            Move(ref i);
-            Move(ref i);
+            Move(ref index);
+            Move(ref index);
             
-            AST_Node source = ParseInstructionArgument(ref i);
+            AST_Node source = ParseInstructionArgument(ref index);
 
             return new BinaryASMInstruction()
             {
@@ -226,11 +226,11 @@ namespace Shiny.Calculator.Parsing
             };
         }
 
-        private CommandExpression ParseCommand(ref int i)
+        private CommandExpression ParseCommand(ref int index)
         {
-            var token = tokens[i];
-            Move(ref i);
-            var rhs = ParseBinaryExpression(ref i, 0);
+            var token = tokens[index];
+            Move(ref index);
+            var rhs = ParseBinaryExpression(ref index, 0);
 
             return new CommandExpression() { CommandName = token.GetValue(), RightHandSide = rhs };
         }
@@ -291,13 +291,13 @@ namespace Shiny.Calculator.Parsing
         //   exp = (l = prev_exp, r = 8)
         //
         #endregion
-        private AST_Node ParseBinaryExpression(ref int i, int level, bool isAssemblyAdressing = false)
+        private AST_Node ParseBinaryExpression(ref int index, int level, bool isAssemblyAdressing = false)
         {
             AST_Node left = null;
 
-            for (; i < tokens.Count; i++)
+            for (; index < tokens.Count; index++)
             {
-                 var token = tokens[i];
+                 var token = tokens[index];
 
                 //
                 // Check if we're dealing with Unary Expression: (-1 -2 etc)
@@ -306,31 +306,31 @@ namespace Shiny.Calculator.Parsing
                 // But since we descent on every oprtator unary expressions will be 
                 // correctly matched.
                 //
-                if (IsLiteralWithOperator(i) && left == null)
+                if (IsLiteralWithOperator(index) && left == null)
                 {
                     UnaryExpression unary = new UnaryExpression();
                     unary.Operator = token.GetValue();
-                    Move(ref i);
+                    Move(ref index);
 
-                    unary.Left = ParseLiteralsAndIdentifiers(ref i);
+                    unary.Left = ParseLiteralsAndIdentifiers(ref index);
                     left = unary;
                 }
-                else if(IsParrenWithOperator(i) && left == null)
+                else if(IsParrenWithOperator(index) && left == null)
                 {
                     UnaryExpression unary = new UnaryExpression();
                     unary.Operator = token.GetValue();
 
-                    Move(ref i);
-                    Move(ref i);
+                    Move(ref index);
+                    Move(ref index);
 
-                    unary.Left = ParseBinaryExpression(ref i, 0);
+                    unary.Left = ParseBinaryExpression(ref index, 0);
                     left = unary;
                 }
-                else if (IsOperator(i))
+                else if (IsOperator(index))
                 {
                     var @operator = (OperatorToken)token;
 
-                    var isValid = ValidateBinaryExpressionOperator(@operator, i);
+                    var isValid = ValidateBinaryExpressionOperator(@operator, index);
 
                     // 
                     // Check if we should descent deeper, if the operator has a
@@ -338,8 +338,8 @@ namespace Shiny.Calculator.Parsing
                     //
                     if (@operator.Level > level)
                     {
-                        Move(ref i);
-                        var right = ParseBinaryExpression(ref i, @operator.Level, isAssemblyAdressing);
+                        Move(ref index);
+                        var right = ParseBinaryExpression(ref index, @operator.Level, isAssemblyAdressing);
                         left = new BinaryExpression() { Left = left, Operator = @operator.GetValue(), Right = right };
                     }
                     else
@@ -349,7 +349,7 @@ namespace Shiny.Calculator.Parsing
                         // This could be improved by explicit itteration control 
                         // but it's not needed for now.
                         //
-                        if (isValid) i--;
+                        if (isValid) index--;
                         return left;
                     }
                 }
@@ -359,12 +359,12 @@ namespace Shiny.Calculator.Parsing
                 // Indexing Access has sense in assembly simulation
                 // Perhaps we should pass it as an argument to recursive descent.
                 //
-                else if(IsIndexingAccessOpen(i))
+                else if(IsIndexingAccessOpen(index))
                 {
-                    Move(ref i);
-                    return ParseBinaryExpression(ref i, 0, isAssemblyAdressing);
+                    Move(ref index);
+                    return ParseBinaryExpression(ref index, 0, isAssemblyAdressing);
                 }
-                else if(IsIndexingAccessClose(i))
+                else if(IsIndexingAccessClose(index))
                 {
                     return left;
                 }
@@ -372,34 +372,34 @@ namespace Shiny.Calculator.Parsing
                 // For Assembly index addressing we need to 
                 // exit when we encouter a comma.
                 //
-                else if(IsComma(i) && isAssemblyAdressing)
+                else if(IsComma(index) && isAssemblyAdressing)
                 {
-                    i--;
+                    index--;
                     return left;
                 }
-                else if(IsOpenBracket(i))
+                else if(IsOpenBracket(index))
                 {
-                    Move(ref i);
-                    return ParseBinaryExpression(ref i, 0);
+                    Move(ref index);
+                    return ParseBinaryExpression(ref index, 0);
                 }
-                else if(IsCloseBracket(i))
+                else if(IsCloseBracket(index))
                 {
                     return left;
                 }
-                else if (IsLiteralsOrVars(i))
+                else if (IsLiteralsOrVars(index))
                 {
-                    left = ParseLiteralsAndIdentifiers(ref i);
+                    left = ParseLiteralsAndIdentifiers(ref index);
                 }
                 else
                 {
-                    return ParsingError("Unexpected sub-expression.", i);
+                    return ParsingError("Unexpected sub-expression.", index);
                 }
             }
 
             return left;
         }
   
-        private bool ValidateBinaryExpressionOperator(OperatorToken @operator, int i)
+        private bool ValidateBinaryExpressionOperator(OperatorToken @operator, int index)
         {
             var isValid = true;
             //
@@ -409,36 +409,36 @@ namespace Shiny.Calculator.Parsing
             //
             if (operators.Contains(@operator.GetValue()) == false)
             {
-                ParsingError("Invalid operator.", $"Supported Operators are: ({string.Join(", ", operators)})", i);
+                ParsingError("Invalid operator.", $"Supported Operators are: ({string.Join(", ", operators)})", index);
                 isValid = false;
             }
 
             //
             // Cannot end on operator.
             //
-            if (IsLastToken(i))
+            if (IsLastToken(index))
             {
-                ParsingError("Operator cannot end the expression.", i);
+                ParsingError("Operator cannot end the expression.", index);
                 isValid = false;
             }
 
             //
             // Validate if the next token is a valid one.
             //
-            if (IsOperator(i + 1) && (IsLiteralWithOperator(i + 1) == false && IsParrenWithOperator(i + 1) == false))
+            if (IsOperator(index + 1) && (IsLiteralWithOperator(index + 1) == false && IsParrenWithOperator(index + 1) == false))
             {
-                ParsingError("Expected literal or variable, but got operator.", i + 1);
+                ParsingError("Expected literal or variable, but got operator.", index + 1);
                 isValid = false;
             }
 
             return isValid;
         }
 
-        private AST_Node ParseLiteralsAndIdentifiers(ref int i)
+        private AST_Node ParseLiteralsAndIdentifiers(ref int index)
         {
-            var token = tokens[i];
+            var token = tokens[index];
 
-            if (IsNumber(i))
+            if (IsNumber(index))
             {
                 object value = null;
                 var numToken = (NumberToken)token;
@@ -471,29 +471,29 @@ namespace Shiny.Calculator.Parsing
 
                 return number;
             }
-            else if (IsText(i))
+            else if (IsText(index))
             {
                 LiteralExpression text = new LiteralExpression() { Value = token.GetValue(), Type = LiteralType.Text };
                 return text;
             }
-            else if (IsBool(i))
+            else if (IsBool(index))
             {
                 LiteralExpression boolean = new LiteralExpression() { Value = token.GetValue(), Type = LiteralType.Bool };
                 return boolean;
             }
-            else if (IsWord(i))
+            else if (IsWord(index))
             {
                 var variable = new IdentifierExpression() { Identifier = token.GetValue() };
                 return variable;
             }
 
-            return ParsingError("Incorrect sub-expression.", i);
+            return ParsingError("Incorrect sub-expression.", index);
         }
 
-        private bool Move(ref int i)
+        private bool Move(ref int index)
         {
-            i++;
-            return (i < tokens.Count) == false;
+            index++;
+            return (index < tokens.Count) == false;
         }
 
         private bool IsOperator(int tokenIndex)
