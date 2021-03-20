@@ -1,11 +1,11 @@
 ﻿using Shiny.Calculator.Parsing;
-using Shiny.Repl.Tokenization;
+using Shiny.Calculator.Tokenization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Shiny.Repl.Parsing
+namespace Shiny.Calculator.Parsing
 {
     public class Parser
     {

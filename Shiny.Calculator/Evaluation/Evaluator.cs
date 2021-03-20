@@ -1,15 +1,14 @@
-﻿using Shiny.Repl.Parsing;
+﻿using Shiny.Calculator.Parsing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Shiny.Calculator.Evaluation;
 
-using BinaryExpression = Shiny.Repl.Parsing.BinaryExpression;
-using AST_Node = Shiny.Repl.Parsing.AST_Node;
-using UnaryExpression = Shiny.Repl.Parsing.UnaryExpression;
+using BinaryExpression = Shiny.Calculator.Parsing.BinaryExpression;
+using AST_Node = Shiny.Calculator.Parsing.AST_Node;
+using UnaryExpression = Shiny.Calculator.Parsing.UnaryExpression;
 using System.IO;
-using Shiny.Calculator.Parsing;
 
 namespace Shiny.Calculator.Evaluation
 {
@@ -57,12 +56,12 @@ namespace Shiny.Calculator.Evaluation
 
             if (result.Type == LiteralType.Number && result.Value != null)
             {
-                printer.Print(new Run() { Text = "=", Color = RunColor.Red });
+                printer.Print(new Run() { Text = "=", Color = Colors.Red });
                 PrintAsBitSet((int)long.Parse(result.Value));
             }
             else if(result.Type == LiteralType.Text && result.Value != null)
             {
-                printer.Print(new Run() { Text = "=", Color = RunColor.Red });
+                printer.Print(new Run() { Text = "=", Color = Colors.Red });
                 PrintAsText(result.Value);
 
                 var resultAsNumber = ConvertToNumber(result);
@@ -351,7 +350,7 @@ namespace Shiny.Calculator.Evaluation
 
                 if (context.IsExplain)
                 {
-                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
+                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = Colors.White });
                     PrintAsBitSet((int)long.Parse(sourceState.Value));
                 }
             }
@@ -377,7 +376,7 @@ namespace Shiny.Calculator.Evaluation
 
                 if (context.IsExplain)
                 {
-                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {value}", Color = RunColor.White });
+                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {value}", Color = Colors.White });
                     PrintAsBitSet(value);
                 }
             }
@@ -397,7 +396,7 @@ namespace Shiny.Calculator.Evaluation
 
                 if (context.IsExplain)
                 {
-                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
+                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = Colors.White });
                     PrintAsBitSet((int)long.Parse(destState.Value));
                 }
             }
@@ -422,7 +421,7 @@ namespace Shiny.Calculator.Evaluation
 
                 if (context.IsExplain)
                 {
-                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = RunColor.White });
+                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = Colors.White });
                     PrintAsBitSet(result);
                 }
             }
@@ -442,7 +441,7 @@ namespace Shiny.Calculator.Evaluation
 
                 if (context.IsExplain)
                 {
-                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
+                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = Colors.White });
                     PrintAsBitSet((int)long.Parse(destState.Value));
                 }
             }
@@ -467,7 +466,7 @@ namespace Shiny.Calculator.Evaluation
 
                 if (context.IsExplain)
                 {
-                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = RunColor.White });
+                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = Colors.White });
                     PrintAsBitSet(result);
                 }
             }
@@ -487,7 +486,7 @@ namespace Shiny.Calculator.Evaluation
 
                 if (context.IsExplain)
                 {
-                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
+                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = Colors.White });
                     PrintAsBitSet((int)long.Parse(destState.Value));
                 }
             }
@@ -512,7 +511,7 @@ namespace Shiny.Calculator.Evaluation
 
                 if (context.IsExplain)
                 {
-                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = RunColor.White });
+                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = Colors.White });
                     PrintAsBitSet(result);
                 }
             }
@@ -539,7 +538,7 @@ namespace Shiny.Calculator.Evaluation
 
             if (context.IsExplain)
             {
-                printer.Print(new Run() { Text = "    " + "eax", Color = RunColor.White });
+                printer.Print(new Run() { Text = "    " + "eax", Color = Colors.White });
                 PrintAsBitSet((int)long.Parse(destState.Value));
             }
 
@@ -565,7 +564,7 @@ namespace Shiny.Calculator.Evaluation
 
             if (context.IsExplain)
             {
-                printer.Print(new Run() { Text = "    " + "eax", Color = RunColor.White });
+                printer.Print(new Run() { Text = "    " + "eax", Color = Colors.White });
                 PrintAsBitSet((int)long.Parse(destState.Value));
             }
 
@@ -585,7 +584,7 @@ namespace Shiny.Calculator.Evaluation
 
                 if (context.IsExplain)
                 {
-                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = RunColor.White });
+                    printer.Print(new Run() { Text = "    " + identifierDest.Identifier, Color = Colors.White });
                     PrintAsBitSet((int)long.Parse(destState.Value));
                 }
             }
@@ -610,7 +609,7 @@ namespace Shiny.Calculator.Evaluation
 
                 if (context.IsExplain)
                 {
-                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = RunColor.White });
+                    printer.Print(new Run() { Text = "    " + $"[{offset}] : {result}", Color = Colors.White });
                     PrintAsBitSet(result);
                 }
             }
@@ -656,9 +655,9 @@ namespace Shiny.Calculator.Evaluation
             if (context.IsExplain)
             {
                 PrintAsBitSet((int)long.Parse(lhs.Value));
-                printer.Print(new Run() { Text = "    " + operatorExpression.Operator, Color = RunColor.Red });
+                printer.Print(new Run() { Text = "    " + operatorExpression.Operator, Color = Colors.Red });
                 PrintAsBitSet((int)long.Parse(rhs.Value));
-                printer.Print(new Run() { Text = "    " + "````````", Color = RunColor.White });
+                printer.Print(new Run() { Text = "    " + "````````", Color = Colors.White });
             }
 
             //
@@ -752,7 +751,7 @@ namespace Shiny.Calculator.Evaluation
 
         private void PrintAsText(string value)
         {
-            printer.Print(new Run() { Text = $"\"{value}\"", Color = (RunColor)(int)Console.ForegroundColor });
+            printer.Print(new Run() { Text = $"\"{value}\"", Color = XConsole.ForegroundColor });
         }
 
         private void PrintAsBitSet(int value)
@@ -769,23 +768,23 @@ namespace Shiny.Calculator.Evaluation
             List<Run> runs = new List<Run>();
 
             string valueToPrint = value.ToString() + new string(' ', Math.Abs(maxOffset - len)) + " => ";
-            runs.Add(new Run() { Text = valueToPrint, Color = (RunColor)(int)Console.ForegroundColor });
+            runs.Add(new Run() { Text = valueToPrint, Color = XConsole.ForegroundColor });
 
             for (int b = 31; b >= 0; b--)
             {
                 var isSet = (value & (1 << (b % 32))) != 0;
                 if (isSet)
                 {
-                    runs.Add(new Run() { Text = "1", Color = RunColor.Green });
+                    runs.Add(new Run() { Text = "1", Color = Colors.Green });
                 }
                 else
                 {
-                    runs.Add(new Run() { Text = "0", Color = RunColor.Blue });
+                    runs.Add(new Run() { Text = "0", Color = Colors.Blue });
                 }
 
                 if (b > 0 && b % 8 == 0)
                 {
-                    runs.Add(new Run() { Text = "_", Color = RunColor.White });
+                    runs.Add(new Run() { Text = "_", Color = Colors.White });
                 }
             }
 

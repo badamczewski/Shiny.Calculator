@@ -41,16 +41,16 @@ namespace Shiny.Calculator.Evaluation
 
             foreach (var s in syntax)
             {
-                RunColor runColor = RunColor.Gray;
+                Color runColor = Colors.Gray;
 
                 if (s.Type == SyntaxRunType.Keyword)
-                    runColor = RunColor.Blue;
+                    runColor = Colors.Blue;
                 else if (s.Type == SyntaxRunType.Identifier)
-                    runColor = RunColor.White;
+                    runColor = Colors.White;
                 else if (s.Type == SyntaxRunType.String)
-                    runColor = RunColor.Gray;
+                    runColor = Colors.Gray;
                 else
-                    runColor = RunColor.DarkGray;
+                    runColor = Colors.DarkGray;
 
                 _printer.PrintInline(new Run() { Color = runColor, Text = s.Value });
             }

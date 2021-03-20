@@ -1,14 +1,14 @@
-﻿using Shiny.Repl.Parsing;
+﻿using Shiny.Calculator.Parsing;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 
-using BinaryExpression = Shiny.Repl.Parsing.BinaryExpression;
-using AST_Node = Shiny.Repl.Parsing.AST_Node;
-using UnaryExpression = Shiny.Repl.Parsing.UnaryExpression;
+using BinaryExpression = Shiny.Calculator.Parsing.BinaryExpression;
+using AST_Node = Shiny.Calculator.Parsing.AST_Node;
+using UnaryExpression = Shiny.Calculator.Parsing.UnaryExpression;
 using Shiny.Calculator.Parsing;
-using Shiny.Repl.Tokenization;
+using Shiny.Calculator.Tokenization;
 
 namespace Shiny.Calculator.Evaluation
 {

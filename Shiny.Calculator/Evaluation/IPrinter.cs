@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
 
-using BinaryExpression = Shiny.Repl.Parsing.BinaryExpression;
-using Expression = Shiny.Repl.Parsing.AST_Node;
-using UnaryExpression = Shiny.Repl.Parsing.UnaryExpression;
+using BinaryExpression = Shiny.Calculator.Parsing.BinaryExpression;
+using Expression = Shiny.Calculator.Parsing.AST_Node;
+using UnaryExpression = Shiny.Calculator.Parsing.UnaryExpression;
 
 namespace Shiny.Calculator.Evaluation
 {

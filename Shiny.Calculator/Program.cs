@@ -1,15 +1,16 @@
 using Shiny.Calculator;
 using Shiny.Calculator.Evaluation;
-using Shiny.Repl.Parsing;
-using Shiny.Repl.Tokenization;
+using Shiny.Calculator.Parsing;
+using Shiny.Calculator.Tokenization;
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Text;
 
-namespace Shiny.Repl
+namespace Shiny.Calculator
 {
     class Program
     {
@@ -27,10 +28,16 @@ namespace Shiny.Repl
         private static Evaluator evaluator = new Evaluator();
         private static ConsolePrinter printer = new ConsolePrinter();
 
+        static void IntializeConsole()
+        {
+            XConsole.ForegroundColor = Colors.Green;
+            XConsole.Clear();
+            XConsole.WriteLine(PrintLogo());
+        }
+
         static void Main(string[] args)
         {
-            Console.Clear();
-            Console.WriteLine(PrintLogo());
+            IntializeConsole();
 
             bool isMultiline = false;
             char breakKey = '\r';
@@ -94,23 +101,23 @@ namespace Shiny.Repl
             if (operatorGlyphs.Contains(keyChar))
             {
                 Console.SetCursorPosition(Console.CursorLeft, Console.CursorTop);
-                ConsoleUtils.Write(ConsoleColor.Red, keyChar.ToString());
+                XConsole.Write(keyChar.ToString(), Colors.Red);
             }
             else if (char.IsLetter(keyChar))
             {
-                ConsoleUtils.Write(ConsoleColor.Yellow, keyChar.ToString());
+                XConsole.Write(keyChar.ToString(), Colors.Yellow);
             }
             else
             {
-                ConsoleUtils.Write(ConsoleColor.Green, keyChar.ToString());
+                XConsole.Write(keyChar.ToString(), Colors.Green);
             }
         }
 
         static KeyBuffer ProcessKeyEvents(string prompt, char breakKey, bool isMultiLine = false)
         {
-            Console.Write(prompt);
+            XConsole.Write(prompt);
             StringBuilder statementBuilder = new StringBuilder();
-            Console.ForegroundColor = ConsoleColor.Green;
+            XConsole.ForegroundColor = Colors.Green;
 
             var keyInfo = new ConsoleKeyInfo();
             int bufferIndex = 0;
@@ -129,12 +136,12 @@ namespace Shiny.Repl
                     if (historyStatement != null)
                     {
                         Console.SetCursorPosition(baseIndex, Console.CursorTop);
-                        Console.Write(new string(' ', statementBuilder.Length + historyStatement.Length));
+                        XConsole.Write(new string(' ', statementBuilder.Length + historyStatement.Length));
                         Console.SetCursorPosition(baseIndex, Console.CursorTop);
 
                         if (keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift))
                         {
-                            Console.Write(statementBuilder.ToString() + historyStatement);
+                            XConsole.Write(statementBuilder.ToString() + historyStatement);
                             statementBuilder.Append(statementBuilder.ToString() + historyStatement);
                         }
                         else
@@ -157,7 +164,7 @@ namespace Shiny.Repl
                     var historyStatement = history[historyIndex & history.Length];
 
                     Console.SetCursorPosition(baseIndex, Console.CursorTop);
-                    Console.Write(new string(' ', statementBuilder.Length));
+                    XConsole.Write(new string(' ', statementBuilder.Length));
                     Console.SetCursorPosition(baseIndex, Console.CursorTop);
 
                     ColorizeExpression(historyStatement);
@@ -190,7 +197,7 @@ namespace Shiny.Repl
                     if (bufferIndex >= statementBuilder.Length)
                     {
                         Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
-                        Console.Write(" ");
+                        XConsole.Write(" ");
                         Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
 
                         statementBuilder.Remove(statementBuilder.Length - 1, 1);
@@ -211,7 +218,7 @@ namespace Shiny.Repl
                     if (keyInfo.Key != ConsoleKey.Enter)
                     {
                         statementBuilder.Append(keyInfo.KeyChar);
-                        Console.Write(keyInfo.KeyChar);
+                        XConsole.Write(keyInfo.KeyChar.ToString());
                     }
 
                     isTerminated = true;
@@ -222,7 +229,7 @@ namespace Shiny.Repl
                 //
                 else if (isMultiLine && keyInfo.Key == ConsoleKey.Enter)
                 {
-                    Console.WriteLine();
+                    XConsole.WriteLine();
                     break;
                 }
                 else
@@ -247,7 +254,7 @@ namespace Shiny.Repl
                         if (clsIdx >= 0 && bufferIndex <= clsIdx + command.Length)
                         {
                             Console.SetCursorPosition(prompt.Length + clsIdx, Console.CursorTop);
-                            ConsoleUtils.Write(ConsoleColor.Blue, command);
+                            XConsole.Write(command, Colors.Blue);
                         }
                     }
 
@@ -268,7 +275,7 @@ namespace Shiny.Repl
             statementBuilder.Append(rhs);
 
             Console.SetCursorPosition(Console.CursorLeft - 1, Console.CursorTop);
-            Console.Write(rhs + " ");
+            XConsole.Write(rhs + " ");
             Console.SetCursorPosition(prompt.Length + bufferIndex - 1, Console.CursorTop);
         }
 
@@ -285,7 +292,7 @@ namespace Shiny.Repl
             statementBuilder.Append(lhs);
             statementBuilder.Append(rhs);
 
-            Console.Write(all.Substring(bufferIndex));
+            XConsole.Write(all.Substring(bufferIndex));
             Console.SetCursorPosition(prompt.Length + bufferIndex + 1, Console.CursorTop);
         }
 
@@ -317,7 +324,7 @@ namespace Shiny.Repl
         {
             printer.Indent = prompt.Length;
 
-            Console.WriteLine();
+            XConsole.WriteLine();
 
             if (string.IsNullOrWhiteSpace(statement))
             {
@@ -347,7 +354,7 @@ namespace Shiny.Repl
                     var stmt = ProcessKeyEvents(nestedPrompt, '\r');
                     var value = Evaluate(stmt.Statement, nestedPrompt);
 
-                    printer.Print(new Run() { Text = "--------", Color = RunColor.White });
+                    printer.Print(new Run() { Text = "--------", Color = Colors.White });
                     var existing = variables[resolved.Key];
 
                     if (value == null)

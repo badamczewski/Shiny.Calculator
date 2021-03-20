@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 
-namespace Shiny.Repl.Tokenization
+namespace Shiny.Calculator.Tokenization
 {
     public class Tokenizer
     {
