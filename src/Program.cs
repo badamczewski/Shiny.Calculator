@@ -14,17 +14,13 @@ namespace Shiny.Calculator
 {
     class Program
     {
-        private static char[] operatorGlyphs = new char[]   { '+', '-', '/', '*', '^', '%', '~', '|', '&', '>', '<' };
-        private static string[] operators    = new string[] { "+", "-", "/", "*", "^", "%", "~", "|", "&", ">>", "<<", ">>>" };
-        private static string[] commands     = new string[] { "cls", "parse", "explain", "explain_on", "explain_off", "code", "help", "regs", "vars", "mem", "result" };
-        private static string[] instructions = new string[] { "mov", "add", "sub", "mul", "div", "shr", "shl" };
-        private static string[] history      = new string[64];
+        private static string[] history = new string[64];
         private static int historyIndex = 0;
         private static string prompt = ">>> ";
 
         private static EvaluatorContext context = new EvaluatorContext();
         private static Tokenizer tokenizer = new Tokenizer();
-        private static Parser parser = new Parser(commands, operators, instructions);
+        private static Parser parser = new Parser(Definitions.Commands, Definitions.Operators, Definitions.Instructions);
         private static Evaluator evaluator = new Evaluator();
         private static ConsolePrinter printer = new ConsolePrinter();
 
@@ -39,19 +35,24 @@ namespace Shiny.Calculator
         {
             IntializeConsole();
 
-            bool isMultiline = false;
             char breakKey = '\r';
+            char multiLineKey = '{';
+            bool isMultiline = false;
             StringBuilder statementsBuilder = new StringBuilder();
-
             string currentPrompt = prompt;
 
             while (true)
             {
-                var data = ProcessKeyEvents(currentPrompt, breakKey, isMultiline);
+                var data = ProcessKeyEvents(currentPrompt, breakKey, multiLineKey, isMultiline);
                 statementsBuilder.Append(data.Statement);
+
+                isMultiline = data.IsMultiLine;
 
                 if (isMultiline)
                 {
+                    breakKey = '}';
+                    currentPrompt = ">>| ";
+
                     if (data.IsTerminated)
                     {
                         currentPrompt = prompt;
@@ -68,22 +69,7 @@ namespace Shiny.Calculator
                     history[historyIndex++ % history.Length] = stmt;
                     var result = Evaluate(stmt, prompt);
 
-                    //
-                    // Process special commands like multiline prompt.
-                    //
-                    if (result != null && result.Type == LiteralType.Special)
-                    {
-                        if (result.Value == EvaluatorSpecialState.MultiLineMode)
-                        {
-                            isMultiline = true;
-                            breakKey = '}';
-                            currentPrompt = ">>| ";
-                        }
-                    }
-                    else
-                    {
-                        statementsBuilder.Clear();
-                    }
+                    statementsBuilder.Clear();
                 }
             }
         }
@@ -98,7 +84,7 @@ namespace Shiny.Calculator
 
         static void Colorize(char keyChar)
         {
-            if (operatorGlyphs.Contains(keyChar))
+            if (Definitions.OperatorGlyphs.Contains(keyChar))
             {
                 Console.SetCursorPosition(Console.CursorLeft, Console.CursorTop);
                 XConsole.Write(keyChar.ToString(), Colors.Red);
@@ -113,7 +99,7 @@ namespace Shiny.Calculator
             }
         }
 
-        static KeyBuffer ProcessKeyEvents(string prompt, char breakKey, bool isMultiLine = false)
+        static KeyBuffer ProcessKeyEvents(string prompt, char breakKey, char multiLineKey, bool wasMultiline = false)
         {
             XConsole.Write(prompt);
             StringBuilder statementBuilder = new StringBuilder();
@@ -123,6 +109,7 @@ namespace Shiny.Calculator
             int bufferIndex = 0;
             int baseIndex = prompt.Length;
             bool isTerminated = false;
+            bool isMultiLine = wasMultiline;
 
             while (keyInfo.KeyChar != breakKey)
             {
@@ -225,10 +212,22 @@ namespace Shiny.Calculator
                     break;
                 }
                 //
+                // Enable multiline mode.
+                //
+                else if(keyInfo.KeyChar == multiLineKey)
+                {
+                    statementBuilder.Append(multiLineKey + Environment.NewLine);
+                    XConsole.WriteLine(multiLineKey.ToString());
+
+                    isMultiLine = true;
+                    break;
+                }
+                //
                 // Move to new line and break here.
                 //
                 else if (isMultiLine && keyInfo.Key == ConsoleKey.Enter)
                 {
+                    statementBuilder.Append(Environment.NewLine);
                     XConsole.WriteLine();
                     break;
                 }
@@ -247,7 +246,7 @@ namespace Shiny.Calculator
 
                     bufferIndex++;
 
-                    foreach (var command in commands)
+                    foreach (var command in Definitions.Commands)
                     {
                         var clsIdx = IndexOf(statementBuilder, command);
 
@@ -261,7 +260,7 @@ namespace Shiny.Calculator
                 }
             }
 
-            return new KeyBuffer() { Statement = statementBuilder.ToString(), IsTerminated = isTerminated };
+            return new KeyBuffer() { Statement = statementBuilder.ToString(), IsTerminated = isTerminated, IsMultiLine = isMultiLine};
         }
 
         private static void RemoveBetween(StringBuilder statementBuilder, char key, int bufferIndex)
@@ -336,11 +335,11 @@ namespace Shiny.Calculator
             var tokens = tokenizer.Tokenize(statement);
             var ast = parser.Parse(tokens);
 
-            if (resolver.Resolve(ast, printer, out var variables))
+            if (resolver.Resolve(ast, printer, out var resolvedContext))
             {
                 var vars = evaluator.GetVariables();
 
-                foreach (var resolved in variables)
+                foreach (var resolved in resolvedContext.ResolvedVariables)
                 {
                     //
                     // Check if we have already resolved this variable.
@@ -351,11 +350,11 @@ namespace Shiny.Calculator
 
                     var nestedPrompt = $">>  {resolved.Key} = ";
 
-                    var stmt = ProcessKeyEvents(nestedPrompt, '\r');
+                    var stmt = ProcessKeyEvents(nestedPrompt, '\r', '{');
                     var value = Evaluate(stmt.Statement, nestedPrompt);
 
                     printer.Print(new Run() { Text = "--------", Color = Colors.White });
-                    var existing = variables[resolved.Key];
+                    var existing = resolvedContext.ResolvedVariables[resolved.Key];
 
                     if (value == null)
                     {
@@ -368,7 +367,7 @@ namespace Shiny.Calculator
                     existing.Value = value.Value;
                 }
 
-                var result = evaluator.Evaluate(ast, variables, printer, context);
+                var result = evaluator.Evaluate(ast, resolvedContext, printer, context);
                 return result;
             }
 
@@ -389,6 +388,7 @@ namespace Shiny.Calculator
         {
             public string Statement { get; set; }
             public bool IsTerminated { get; set; }
+            public bool IsMultiLine { get; set; }
         }
     }
 }

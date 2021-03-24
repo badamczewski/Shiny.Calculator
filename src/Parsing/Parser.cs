@@ -11,6 +11,7 @@ namespace Shiny.Calculator.Parsing
     {
         private List<AST_Error> errors = null;
         private List<Token> tokens;
+        private bool isBlock = false;
         private string[] commands;
         private string[] instructions;
         private string[] operators;
@@ -26,15 +27,22 @@ namespace Shiny.Calculator.Parsing
         {
             errors = new List<AST_Error>();
             AST syntaxTree = new AST();
+            syntaxTree.Statements = new List<AST_Node>();
 
             try
             {
                 this.tokens = tokens;
                 int index = 0;
-                var stmt = ParseStatement(ref index);
-                syntaxTree.Root = stmt;
-                syntaxTree.Errors = errors;
 
+                for (; index < tokens.Count; index++)
+                {
+                    if (IsEndOfStatement(index)) continue;
+
+                    var stmt = ParseStatement(ref index);
+                    syntaxTree.Statements.Add(stmt);
+                }
+
+                syntaxTree.Errors = errors;
                 return syntaxTree;
             }
             catch(Exception ex)
@@ -54,14 +62,19 @@ namespace Shiny.Calculator.Parsing
             {
                 return ParseInstruction(ref index);
             }
-            else if(IsVariableAssigmnent(index))
+            else if (IsVariableAssigmnent(index))
             {
                 return ParseVariableAssigment(ref index);
             }
-            else if(IsLiteralsOrVars(index) || IsOpenBracket(index) || IsParrenWithOperator(index))
+            else if (IsLiteralsOrVars(index) || IsOpenBracket(index) || IsParrenWithOperator(index))
             {
                 return ParseBinaryExpression(ref index, 0);
             }
+            else if(IsOpenBlock(index))
+            {
+                return ParseBlock(ref index);
+            }
+
 
             return ParsingError("Unknown statement", index);
         }
@@ -94,23 +107,15 @@ namespace Shiny.Calculator.Parsing
             if (IsOpenBlock(index))
             {
                 //
-                // Create a partial block that will let the caller know
-                // that we need to change to multiline mode and re-parse the entire
-                // program.
+                // Parse blocks as programs that have a list of statements.
                 //
-                if(IsLastToken(index + 1))
+                var block = ParseBlock(ref index);
+
+                return new VariableAssigmentExpression()
                 {
-                    return new VariableAssigmentExpression()
-                    {
-                        Identifier = variable,
-                        Assigment = new PartialBlockExpression()
-                    };
-                }
-                //
-                // @TODO: Blocks are still not implemented so this is just a dumb
-                // placeholder.
-                //
-                return new BlockExpression();
+                    Identifier = variable,
+                    Assigment = block
+                };
             }
             else
             {
@@ -121,6 +126,31 @@ namespace Shiny.Calculator.Parsing
                     Assigment = assigment
                 };
             }
+        }
+
+        private AST_Node ParseBlock(ref int index)
+        {
+            Move(ref index);
+            isBlock = true;
+
+            List<AST_Node> nodes = new List<AST_Node>();
+
+            for (; index < tokens.Count; index++)
+            {
+                //
+                // Remove empty lines and break on block close '}'
+                //
+                if (IsEndOfStatement(index)) continue;
+                if (IsCloseBlock(index)) { break; }
+
+                var stmt = ParseStatement(ref index);
+                nodes.Add(stmt);
+
+            }
+
+            isBlock = false;
+
+            return new BlockExpression() { Body = nodes };
         }
 
         private AST_Node ParseInstruction(ref int index)
@@ -147,6 +177,34 @@ namespace Shiny.Calculator.Parsing
             {
                 return ParseTwoArgInstruction(name, ref index);
             }
+            else if (name == "cmp")
+            {
+                return ParseTwoArgInstruction(name, ref index);
+            }
+            else if(name == "jle")
+            {
+                return ParseSingleArgInstruction(name, ref index);
+            }
+            else if (name == "jge")
+            {
+                return ParseSingleArgInstruction(name, ref index);
+            }
+            else if (name == "jl")
+            {
+                return ParseSingleArgInstruction(name, ref index);
+            }
+            else if (name == "jg")
+            {
+                return ParseSingleArgInstruction(name, ref index);
+            }
+            else if (name == "je")
+            {
+                return ParseSingleArgInstruction(name, ref index);
+            }
+            else if (name == "jne")
+            {
+                return ParseSingleArgInstruction(name, ref index);
+            }
             else if(name == "mul")
             {
                 return ParseSingleArgInstruction(name, ref index);
@@ -155,14 +213,21 @@ namespace Shiny.Calculator.Parsing
             {
                 return ParseSingleArgInstruction(name, ref index);
             }
+            else if(name == "label")
+            {
+                Move(ref index);
+                var labelName = tokens[index].GetValue();
+                Move(ref index);
+                return new AST_Label() { Label = labelName };
+            }
  
-            return ParsingError("Unknown assembly instruction", index);
+            return ParsingError("Unknown assembly instruction.", index);
         }
 
         private AST_Node ParseSingleArgInstruction(string name, ref int index)
         {
             if (IsLiteralsOrVarsOrIndexing(index + 1) == false)
-                return ParsingError("Missing instruction arguments", index);
+                return ParsingError("Missing instruction arguments.", index);
 
             Move(ref index);
             //
@@ -389,6 +454,17 @@ namespace Shiny.Calculator.Parsing
                 else if (IsLiteralsOrVars(index))
                 {
                     left = ParseLiteralsAndIdentifiers(ref index);
+                }
+                //
+                // IF we are parsing a block we need to check for block temrination
+                //
+                else if(isBlock && IsCloseBlock(index))
+                {
+                    return left;
+                }
+                else if (isBlock && IsEndOfStatement(index))
+                {
+                    return left;
                 }
                 else
                 {
@@ -707,6 +783,11 @@ namespace Shiny.Calculator.Parsing
         }
     }
 
+    public class AST_Label : AST_Node
+    {
+        public string Label { get; set; }
+    }
+
     public class BinaryExpression : AST_Node
     {
         public AST_Node Left { get; set; }
@@ -747,13 +828,24 @@ namespace Shiny.Calculator.Parsing
         public int Possition { get; set; }
         public string Name { get; set; }
 
+        //
+        // Relative address, since this language mixes a bunch of 
+        // conflicting things like, maths, programming and x86 assembly
+        // each node in the AST can be addressed using an artificial address.
+        // This will allow us to later create jump and goto instructions that
+        // will reference this address.
+        //
+        public string Address { get; set; }
+
         public virtual void Print()
         {
         }
 
         public AST_Node()
         {
-            Name = IdGen++.ToString();
+            var id = IdGen++.ToString();
+            Name = id;
+            Address = id; 
         }
 
         public static void ResetID()
@@ -835,15 +927,10 @@ namespace Shiny.Calculator.Parsing
         public AST_Node Expression { get; set; }
     }
 
-    //
-    // Nothing here, it's a partial block assigment.
-    // We allow it since it's a special top level node.
-    // 
-    public class PartialBlockExpression : AST_Node {}
-
     public class BlockExpression : AST_Node
     {
-        public AST_Node Root { get; set; }
+        public List<AST_Node> Body { get; set; }
+        public Dictionary<string, int> LabelToAddressMap { get; set; }
     }
 
     public class VariableAssigmentExpression : AST_Node

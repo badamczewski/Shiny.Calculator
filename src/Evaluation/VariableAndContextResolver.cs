@@ -3,26 +3,35 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Linq;
-
 using BinaryExpression = Shiny.Calculator.Parsing.BinaryExpression;
 using AST_Node = Shiny.Calculator.Parsing.AST_Node;
 using UnaryExpression = Shiny.Calculator.Parsing.UnaryExpression;
-using Shiny.Calculator.Parsing;
-using Shiny.Calculator.Tokenization;
 
 namespace Shiny.Calculator.Evaluation
 {
+    public class ResolvedContext
+    {
+        public Dictionary<string, EvaluatorState> ResolvedVariables;
+    }
+
     public class VariableAndContextResolver
     {
+        private Enviroment enviroment = new Enviroment();
+
         private Dictionary<string, EvaluatorState> variables = new Dictionary<string, EvaluatorState>();
 
-        public bool Resolve(AST syntaxTree, IPrinter printer, out Dictionary<string, EvaluatorState> resolvedVariables)
+        public bool Resolve(AST syntaxTree, IPrinter printer, out ResolvedContext resolved)
         { 
             ResolveErrors(syntaxTree, printer);
 
             variables.Clear();
-            Visit(syntaxTree.Root);
-            resolvedVariables = variables;
+
+            foreach (var stmt in syntaxTree.Statements)
+                Visit(stmt);
+
+            resolved = new ResolvedContext();
+            resolved.ResolvedVariables = variables;
+                
             //
             // If the syntax tree is error free we can continue with evaluation.
             //
@@ -104,24 +113,41 @@ namespace Shiny.Calculator.Evaluation
             {
                 EvaluateUnaryExpression(unaryExpression);
                 return;
-            }
-            else if (expression is LiteralExpression literalExpression)
-            {
-                EvaluateLiteralExpression(literalExpression);
-                return;
-            }
+            }           
             else if (expression is IdentifierExpression identifierExpression)
             {
                 variables.TryAdd(identifierExpression.Identifier, new EvaluatorState());
                 return;
             }
+            else if (expression is BlockExpression block)
+            {
+                block.LabelToAddressMap = new Dictionary<string, int>();
+                //
+                // Block needs an index that will increment. 
+                // so when we encounter a label we need to save that index.
+                //
+                int idx = 0;
+                foreach (var stmt in block.Body)
+                {
+                    if (stmt is AST_Label label)
+                    {
+                        label.Address = idx.ToString();
+                        block.LabelToAddressMap.Add(label.Label, idx);
+                    }
+                    else
+                    {
+                        Visit(stmt);
+                    }
+                    idx++;
+                }
+            }
+            else if(expression is VariableAssigmentExpression variableAssigmentExpression)
+            {
+                Visit(variableAssigmentExpression.Assigment);
+                return;
+            }
 
             return;
-        }
-
-        private EvaluatorState EvaluateLiteralExpression(LiteralExpression literalExpression)
-        {
-            return null;
         }
 
         private void EvaluateUnaryExpression(UnaryExpression unaryExpression)
