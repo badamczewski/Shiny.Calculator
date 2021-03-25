@@ -20,14 +20,8 @@ namespace Shiny.Calculator.Evaluation
         public Enviroment Enviroment;
     }
 
-    public class BlockContext
+    public class ErrorState : EvaluatorState
     {
-        public Dictionary<string, int> Labels = new Dictionary<string, int>();
-        public Dictionary<string, EvaluatorState> Variables = new Dictionary<string, EvaluatorState>()
-        {
-            { "res", new EvaluatorState() { Value = null, Type = LiteralType.Any } }
-        };
-        public int PC;
+        
     }
-
 }

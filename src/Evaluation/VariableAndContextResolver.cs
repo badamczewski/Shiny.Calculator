@@ -90,7 +90,11 @@ namespace Shiny.Calculator.Evaluation
                     printer.PrintInline(tokenRuns.ToArray());
 
                     printer.Print();
-                    printer.Print(Run.Yellow(new string(' ', error.Possition) + marker));
+
+                    if (error.Possition >= 0)
+                    {
+                        printer.Print(Run.Yellow(new string(' ', error.Possition) + marker));
+                    }
 
                     if (string.IsNullOrWhiteSpace(error.HelpMessage) == false)
                     {

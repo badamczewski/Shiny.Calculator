@@ -42,13 +42,13 @@ namespace Shiny.Calculator.Evaluation
                 return;
             }
 
-            _printer.Print(Run.Yellow($"???-{expression.Name}"));
+            _printer.Print(Run.Yellow($"???-{expression.ID}"));
         }
 
         private EvaluatorState EvaluateIdentifierExpression(IdentifierExpression identifierExpression)
         {
             _printer.Print(
-                Run.Green($"IDENTIFIER-{identifierExpression.Name} =>"),
+                Run.Green($"IDENTIFIER-{identifierExpression.ID} =>"),
                 Run.White($"'{identifierExpression.Identifier}'"));
 
             return null;
@@ -57,7 +57,7 @@ namespace Shiny.Calculator.Evaluation
         private EvaluatorState EvaluateLiteralExpression(LiteralExpression literalExpression)
         {
             _printer.Print(
-                Run.Green($"LITERAL-{literalExpression.Name} =>"),
+                Run.Green($"LITERAL-{literalExpression.ID} =>"),
                 Run.White($"'{literalExpression.Value}'"));
 
             return null;
@@ -66,7 +66,7 @@ namespace Shiny.Calculator.Evaluation
         private void EvaluateUnaryExpression(UnaryExpression unaryExpression)
         {
             _printer.Print(
-                Run.Green($"UNARY-{unaryExpression.Name} =>"));
+                Run.Green($"UNARY-{unaryExpression.ID} =>"));
 
             _printer.Indent += 4;
 
@@ -81,7 +81,7 @@ namespace Shiny.Calculator.Evaluation
         private void EvaluateBinaryExpression(BinaryExpression operatorExpression)
         {
             _printer.Print(
-                Run.Green($"BINARY-{operatorExpression.Name} =>"));
+                Run.Green($"BINARY-{operatorExpression.ID} =>"));
 
             
             _printer.Indent += 4;

@@ -166,6 +166,10 @@ namespace Shiny.Calculator.Evaluation
             {
                 return EvaluateBlock(blockExpression);
             }
+            else if(expression is FunctionCallExpression functionCall)
+            {
+                return EvalutateFunctionCallExpression(functionCall);
+            }
             else if(expression is CommandExpression commandExpression)
             {
                 if (commandExpression.CommandName == "explain")
@@ -269,6 +273,31 @@ namespace Shiny.Calculator.Evaluation
             throw new ArgumentException($"Invalid Expression: '{expression.ToString()}'");
         }
 
+        private EvaluatorState EvalutateFunctionCallExpression(FunctionCallExpression functionCall)
+        {
+            //
+            // Is built-in function.
+            //
+            switch (functionCall.Name)
+            {
+                case "assert":
+                    {
+                        var a = Visit(functionCall.Arguments[0]);
+                        var b = Visit(functionCall.Arguments[1]);
+
+                        //Error.
+                        if(a.Value != b.Value)
+                        {
+                            Error($"Assertion failed for \"{a.Value}\" and \"{b.Value}\"", functionCall);
+                        }
+                        
+                        break;
+                    }
+            }
+
+            return EvaluatorState.Empty();
+        }
+
         private EvaluatorState EvaluateIdentifierExpression(IdentifierExpression identifierExpression)
         {
             if (context.IsAssemblyContext)
@@ -363,46 +392,46 @@ namespace Shiny.Calculator.Evaluation
         {
             if(assemblyInstruction is BinaryASMInstruction binaryAsm)
             {
-                if(binaryAsm.Name == "mov")
+                if(binaryAsm.ID == "mov")
                 {
                     EvaluateAsmMov(binaryAsm);
                 }
-                else if(binaryAsm.Name == "add")
+                else if(binaryAsm.ID == "add")
                 {
                     EvaluateAsmAdd(binaryAsm);
                 }
-                else if (binaryAsm.Name == "sum")
+                else if (binaryAsm.ID == "sum")
                 {
                     EvaluateAsmAdd(binaryAsm);
                 }
-                else if (binaryAsm.Name == "shr")
+                else if (binaryAsm.ID == "shr")
                 {
                     EvaluateAsmShr(binaryAsm);
                 }
-                else if (binaryAsm.Name == "shl")
+                else if (binaryAsm.ID == "shl")
                 {
                     EvaluateAsmShl(binaryAsm);
                 }
-                else if(binaryAsm.Name == "cmp")
+                else if(binaryAsm.ID == "cmp")
                 {
                     EvaluateAsmCmp(binaryAsm);
                 }
             }
             else if(assemblyInstruction is UnaryASMInstruction unaryASM)
             {
-                if (unaryASM.Name == "mul")
+                if (unaryASM.ID == "mul")
                 {
                     EvaluateAsmMul(unaryASM);
                 }
-                else if (unaryASM.Name == "div")
+                else if (unaryASM.ID == "div")
                 {
                     EvaluateAsmDiv(unaryASM);
                 }
-                else if (unaryASM.Name == "jle")
+                else if (unaryASM.ID == "jle")
                 {
                     EvaluateAsmJLE(unaryASM);
                 }
-                else if (unaryASM.Name == "jge")
+                else if (unaryASM.ID == "jge")
                 {
                     EvaluateAsmJGE(unaryASM);
                 }
@@ -935,6 +964,12 @@ namespace Shiny.Calculator.Evaluation
             }
 
             throw new ArgumentException("Invalid Operator");
+        }
+
+        private void Error(string message, AST_Node node)
+        {
+            printer.Print();
+            printer.Print(Run.Red($"{message}"));
         }
 
         private void PrintAsBlock()

@@ -45,7 +45,7 @@ namespace Shiny.Calculator.Parsing
                 syntaxTree.Errors = errors;
                 return syntaxTree;
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 ParsingError(ex.Message, -1);
                 return syntaxTree;
@@ -66,16 +66,67 @@ namespace Shiny.Calculator.Parsing
             {
                 return ParseVariableAssigment(ref index);
             }
+            else if (IsFunctionCall(index))
+            {
+                return ParseFunctionCall(ref index);
+            }
             else if (IsLiteralsOrVars(index) || IsOpenBracket(index) || IsParrenWithOperator(index))
             {
                 return ParseBinaryExpression(ref index, 0);
             }
-            else if(IsOpenBlock(index))
+            else if (IsOpenBlock(index))
             {
                 return ParseBlock(ref index);
             }
+            
 
             return ParsingError("Unknown statement", index);
+        }
+
+        private AST_Node ParseFunctionCall(ref int index)
+        {
+            //
+            // Get function Name.  
+            //
+            FunctionCallExpression functionCall = new FunctionCallExpression();
+            functionCall.Name = tokens[index].GetValue();
+            //
+            // Parse Arguments, parse until (')'), each itteration requires a sepearator (',')
+            //
+            Move(ref index);
+            
+            List<AST_Node> arguments = new List<AST_Node>();
+            while (IsCloseBracket(index) == false)
+            {
+                if (IsLiteralsOrVarsOrIndexing(index))
+                {
+                    var arg = ParseBinaryExpression(ref index, 0, isSeparatorMode: true);
+                    arguments.Add(arg);      
+                    
+                    if(IsComma(index))
+                    {
+                        Move(ref index);
+                        // By Design; conditions are IMHO better structured if they are positive first.
+                        continue;
+                    }
+                    else if(IsCloseBracket(index))
+                    {                        
+                        // By Design; conditions are IMHO better structured if they are positive first.
+                        continue;
+                    }
+                    else
+                    {
+                        return ParsingError("Function argument needs a separator or a close bracket.", index);
+                    }
+                }
+                else
+                {
+                    return ParsingError("Invalid function argument format.", index);
+                }
+            }
+
+            functionCall.Arguments = arguments;
+            return functionCall;
         }
 
         private AST_Node ParseVariableAssigment(ref int index)
@@ -83,9 +134,9 @@ namespace Shiny.Calculator.Parsing
             //
             // Create the identifier.
             // 
-            var variable = new IdentifierExpression() 
-            { 
-                Identifier = tokens[index].GetValue() 
+            var variable = new IdentifierExpression()
+            {
+                Identifier = tokens[index].GetValue()
             };
             //
             // Shoud be equals operator.
@@ -180,7 +231,7 @@ namespace Shiny.Calculator.Parsing
             {
                 return ParseTwoArgInstruction(name, ref index);
             }
-            else if(name == "jle")
+            else if (name == "jle")
             {
                 return ParseSingleArgInstruction(name, ref index);
             }
@@ -204,7 +255,7 @@ namespace Shiny.Calculator.Parsing
             {
                 return ParseSingleArgInstruction(name, ref index);
             }
-            else if(name == "mul")
+            else if (name == "mul")
             {
                 return ParseSingleArgInstruction(name, ref index);
             }
@@ -212,14 +263,14 @@ namespace Shiny.Calculator.Parsing
             {
                 return ParseSingleArgInstruction(name, ref index);
             }
-            else if(name == "label")
+            else if (name == "label")
             {
                 Move(ref index);
                 var labelName = tokens[index].GetValue();
                 Move(ref index);
                 return new AST_Label() { Label = labelName };
             }
- 
+
             return ParsingError("Unknown assembly instruction.", index);
         }
 
@@ -236,7 +287,7 @@ namespace Shiny.Calculator.Parsing
 
             return new UnaryASMInstruction()
             {
-                Name = name,
+                ID = name,
                 Source = source
             };
         }
@@ -261,7 +312,7 @@ namespace Shiny.Calculator.Parsing
 
         private AST_Node ParseTwoArgInstruction(string name, ref int index)
         {
-            if(IsLiteralsOrVarsOrIndexing(index + 1) == false)
+            if (IsLiteralsOrVarsOrIndexing(index + 1) == false)
                 return ParsingError("Missing instruction arguments.", index);
 
             Move(ref index);
@@ -270,21 +321,27 @@ namespace Shiny.Calculator.Parsing
             // INST A,B
             //
             AST_Node dest = ParseInstructionArgument(ref index);
+            //
+            // If this was a literal we need to move it to comma.
+            //
+            if(IsComma(index + 1))
+            {
+                Move(ref index);
+            }
 
-            if (IsComma(index + 1) == false && IsLiteralsOrVarsOrIndexing(index + 2))
+            if (IsComma(index) == false && IsLiteralsOrVarsOrIndexing(index + 1))
                 return ParsingError("Missing comma between arguments.", index);
 
-            if (IsComma(index + 1) == false)
+            if (IsComma(index) == false)
                 return ParsingError("This instruction requires two arguments.", index);
 
             Move(ref index);
-            Move(ref index);
-            
+
             AST_Node source = ParseInstructionArgument(ref index);
 
             return new BinaryASMInstruction()
             {
-                Name = name,
+                ID = name,
                 Desination = dest,
                 Source = source
             };
@@ -355,13 +412,13 @@ namespace Shiny.Calculator.Parsing
         //   exp = (l = prev_exp, r = 8)
         //
         #endregion
-        private AST_Node ParseBinaryExpression(ref int index, int level, bool isAssemblyAdressing = false)
+        private AST_Node ParseBinaryExpression(ref int index, int level, bool isSeparatorMode = false)
         {
             AST_Node left = null;
 
             for (; index < tokens.Count; index++)
             {
-                 var token = tokens[index];
+                var token = tokens[index];
 
                 //
                 // Check if we're dealing with Unary Expression: (-1 -2 etc)
@@ -379,7 +436,7 @@ namespace Shiny.Calculator.Parsing
                     unary.Left = ParseLiteralsAndIdentifiers(ref index);
                     left = unary;
                 }
-                else if(IsParrenWithOperator(index) && left == null)
+                else if (IsParrenWithOperator(index) && left == null)
                 {
                     UnaryExpression unary = new UnaryExpression();
                     unary.Operator = token.GetValue();
@@ -403,7 +460,7 @@ namespace Shiny.Calculator.Parsing
                     if (@operator.Level > level)
                     {
                         Move(ref index);
-                        var right = ParseBinaryExpression(ref index, @operator.Level, isAssemblyAdressing);
+                        var right = ParseBinaryExpression(ref index, @operator.Level, isSeparatorMode);
                         left = new BinaryExpression() { Left = left, Operator = @operator.GetValue(), Right = right };
                     }
                     else
@@ -423,12 +480,12 @@ namespace Shiny.Calculator.Parsing
                 // Indexing Access has sense in assembly simulation
                 // Perhaps we should pass it as an argument to recursive descent.
                 //
-                else if(IsIndexingAccessOpen(index))
+                else if (IsIndexingAccessOpen(index))
                 {
                     Move(ref index);
-                    return ParseBinaryExpression(ref index, 0, isAssemblyAdressing);
+                    return ParseBinaryExpression(ref index, 0, isSeparatorMode);
                 }
-                else if(IsIndexingAccessClose(index))
+                else if (IsIndexingAccessClose(index))
                 {
                     return left;
                 }
@@ -436,17 +493,16 @@ namespace Shiny.Calculator.Parsing
                 // For Assembly index addressing we need to 
                 // exit when we encouter a comma.
                 //
-                else if(IsComma(index) && isAssemblyAdressing)
+                else if (IsComma(index) && isSeparatorMode)
                 {
-                    index--;
                     return left;
                 }
-                else if(IsOpenBracket(index))
+                else if (IsOpenBracket(index))
                 {
                     Move(ref index);
                     return ParseBinaryExpression(ref index, 0);
                 }
-                else if(IsCloseBracket(index))
+                else if (IsCloseBracket(index))
                 {
                     return left;
                 }
@@ -457,7 +513,7 @@ namespace Shiny.Calculator.Parsing
                 //
                 // IF we are parsing a block we need to check for block temrination
                 //
-                else if(isBlock && IsCloseBlock(index))
+                else if (isBlock && IsCloseBlock(index))
                 {
                     return left;
                 }
@@ -473,7 +529,7 @@ namespace Shiny.Calculator.Parsing
 
             return left;
         }
-  
+
         private bool ValidateBinaryExpressionOperator(OperatorToken @operator, int index)
         {
             var isValid = true;
@@ -578,7 +634,7 @@ namespace Shiny.Calculator.Parsing
 
         private bool IsParrenWithOperator(int tokenIndex)
         {
-            if(Match(tokenIndex, (TokenKind.Operator, "-"), (TokenKind.BinaryOperator, "~")))
+            if (Match(tokenIndex, (TokenKind.Operator, "-"), (TokenKind.BinaryOperator, "~")))
                 return IsOpenBracket(tokenIndex + 1);
 
             return false;
@@ -631,6 +687,11 @@ namespace Shiny.Calculator.Parsing
         private bool IsText(int tokenIndex)
         {
             return Match(tokenIndex, TokenKind.Text);
+        }
+
+        private bool IsFunctionCall(int tokenIndex)
+        {
+            return IsWord(tokenIndex) && IsOpenBracket(tokenIndex + 1);
         }
 
         private bool IsLiteralsOrVars(int tokenIndex)
@@ -754,17 +815,24 @@ namespace Shiny.Calculator.Parsing
             return ParsingError(errorMessage, null, i);
         }
 
-        private AST_Node ParsingError(string errorMessage, string helpMessage, int i)
+        private AST_Node ParsingError(string errorMessage, string helpMessage, int index)
         {
             int line = -1;
             int pos  = -1;
 
             Token[] tokensOnTheSameLine = null;
 
-            if (i < tokens.Count)
+            if (index < tokens.Count)
             {
-                line = tokens[i].Line;
-                pos  = tokens[i].Position;
+                line = tokens[index].Line;
+                pos  = tokens[index].Position;
+
+                tokensOnTheSameLine = tokens.Where(x => x.Line == line).ToArray();
+            }
+            else if(index - 1 < tokens.Count)
+            {
+                line = tokens[index - 1].Line;
+                pos  = tokens[index - 1].Position + tokens[index - 1].Input.Length;
 
                 tokensOnTheSameLine = tokens.Where(x => x.Line == line).ToArray();
             }
@@ -774,7 +842,8 @@ namespace Shiny.Calculator.Parsing
                 ErrorMessage = errorMessage,
                 HelpMessage = helpMessage,
                 Line = line, Possition = pos, 
-                SurroundingTokens = tokensOnTheSameLine 
+                SurroundingTokens = tokensOnTheSameLine,
+                TokenIndex = index
             };
 
             errors.Add(error);
@@ -784,6 +853,14 @@ namespace Shiny.Calculator.Parsing
 
     public class AST_Label : AST_Node
     {
+        //
+        // Relative address, since this language mixes a bunch of 
+        // conflicting things like, maths, programming and x86 assembly
+        // each node in the AST can be addressed using an artificial address.
+        // This will allow us to later create jump and goto instructions that
+        // will reference this address.
+        //
+        public string Address { get; set; }
         public string Label { get; set; }
     }
 
@@ -795,7 +872,7 @@ namespace Shiny.Calculator.Parsing
 
         public override void Print()
         {
-            Console.WriteLine($"BINARY-{Name} = {Operator}");
+            Console.WriteLine($"BINARY-{ID} = {Operator}");
             Left.Print();
             Right.Print();
         }
@@ -808,7 +885,7 @@ namespace Shiny.Calculator.Parsing
 
         public override void Print()
         {
-            Console.WriteLine($"UNARY-{Name} = {Operator}");
+            Console.WriteLine($"UNARY-{ID} = {Operator}");
             Left.Print();
         }
     }
@@ -818,6 +895,7 @@ namespace Shiny.Calculator.Parsing
         public string ErrorMessage { get; set; }
         public string HelpMessage { get; set; }
         public Token[] SurroundingTokens { get; set; }
+        public int TokenIndex { get; set; }
     }
 
     public class AST_Node
@@ -825,16 +903,7 @@ namespace Shiny.Calculator.Parsing
         private static int IdGen = 0;
         public int Line { get; set; }
         public int Possition { get; set; }
-        public string Name { get; set; }
-
-        //
-        // Relative address, since this language mixes a bunch of 
-        // conflicting things like, maths, programming and x86 assembly
-        // each node in the AST can be addressed using an artificial address.
-        // This will allow us to later create jump and goto instructions that
-        // will reference this address.
-        //
-        public string Address { get; set; }
+        public string ID { get; set; }
 
         public virtual void Print()
         {
@@ -843,8 +912,7 @@ namespace Shiny.Calculator.Parsing
         public AST_Node()
         {
             var id = IdGen++.ToString();
-            Name = id;
-            Address = id; 
+            ID = id;
         }
 
         public static void ResetID()
@@ -887,7 +955,7 @@ namespace Shiny.Calculator.Parsing
 
         public override void Print()
         {
-            Console.WriteLine($"LIT-{Name} = {Value}");
+            Console.WriteLine($"LIT-{ID} = {Value}");
         }
     }
 
@@ -906,7 +974,7 @@ namespace Shiny.Calculator.Parsing
     {
         public override void Print()
         {
-            Console.WriteLine($"ASM-{Name}");
+            Console.WriteLine($"ASM-{ID}");
         }
     }
 
@@ -938,6 +1006,12 @@ namespace Shiny.Calculator.Parsing
         public AST_Node Assigment { get; set; }
     }
 
+    public class FunctionCallExpression : AST_Node
+    {
+        public string Name { get; set; }
+        public List<AST_Node> Arguments { get; set; }
+    }
+
     public class IdentifierExpression : AST_Node
     {
         public LiteralType Type { get; set; }
@@ -951,7 +1025,7 @@ namespace Shiny.Calculator.Parsing
 
         public override void Print()
         {
-            Console.WriteLine($"IDEN-{Name} = {Identifier}");
+            Console.WriteLine($"IDEN-{ID} = {Identifier}");
         }
     }
 }
