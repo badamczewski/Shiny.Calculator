@@ -75,7 +75,6 @@ namespace Shiny.Calculator.Parsing
                 return ParseBlock(ref index);
             }
 
-
             return ParsingError("Unknown statement", index);
         }
 
@@ -864,7 +863,7 @@ namespace Shiny.Calculator.Parsing
         Void,
         Struct,
         Function,
-        Special
+        Block
     }
 
     public class LiteralExpression : AST_Node

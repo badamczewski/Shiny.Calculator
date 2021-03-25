@@ -41,9 +41,9 @@ namespace Shiny.Calculator
 
     public class Colors
     {
-        public static Color Green  = new Color(0, 255, 0);
+        public static Color Green  = new Color(0, 176, 80);
         public static Color Yellow = new Color(255, 255, 0);
-        public static Color Blue   = new Color(10, 10, 255);
+        public static Color Blue   = new Color(86, 156, 214);
         public static Color Red    = new Color(255, 0, 0);
         public static Color White  = new Color(255, 255, 255);
         public static Color Gray   = new Color(192, 192, 192);

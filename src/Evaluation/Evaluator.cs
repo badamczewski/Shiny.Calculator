@@ -12,22 +12,6 @@ using System.IO;
 
 namespace Shiny.Calculator.Evaluation
 {
-    //
-    // Enviroment control lexical scopes.
-    //
-    public class Enviroment
-    {
-        public string Name { get; set; }
-
-        public Dictionary<string, EvaluatorState> Variables = new Dictionary<string, EvaluatorState>()
-        {
-            { "res", new EvaluatorState() { Value = null, Type = LiteralType.Any } }
-        };
-
-        public int StatementIndex = 0;
-        public Dictionary<string, int> Labels = new Dictionary<string, int>();
-    }
-
     public class EvaluatorContext
     {
         public bool IsExplainAll;
@@ -257,7 +241,7 @@ namespace Shiny.Calculator.Evaluation
                             case LiteralType.Text:
                                 PrintAsBitSet((int)long.Parse(variable.Value.Value));
                                 break;
-                            case LiteralType.Special:
+                            case LiteralType.Block:
                                 PrintAsBlock();
                                 break;
                         }
@@ -292,7 +276,7 @@ namespace Shiny.Calculator.Evaluation
 
             var variable = enviroment.Variables[identifierExpression.Identifier];
 
-            if(variable.Type == LiteralType.Special)
+            if(variable.Type == LiteralType.Block)
             {
                 var block = (BlockState)variable;
                 var envCopy = this.enviroment;
@@ -348,7 +332,7 @@ namespace Shiny.Calculator.Evaluation
             if (enviroment.Variables.TryGetValue(identifier, out var state))
             {
                 state = new BlockState() {
-                    Type = LiteralType.Special,
+                    Type = LiteralType.Block,
                     Block = blockExpression,
                     Enviroment = new Enviroment()
                     {
@@ -361,7 +345,7 @@ namespace Shiny.Calculator.Evaluation
             else
             {
                 state = new BlockState() {
-                    Type = LiteralType.Special,
+                    Type = LiteralType.Block,
                     Block = blockExpression,
                     Enviroment = new Enviroment()
                     {
@@ -439,6 +423,10 @@ namespace Shiny.Calculator.Evaluation
                 if (registers.TryGetValue(identifier.Identifier, out var reg))
                 {
                     state = reg;
+                }
+                else if(enviroment.Variables.TryGetValue(identifier.Identifier, out var variable))
+                {
+                    state = variable;
                 }
                 else if (checkLabels)
                 {
@@ -843,12 +831,6 @@ namespace Shiny.Calculator.Evaluation
             var lhs = Visit(unaryExpression.Left);
 
             var result = EvalUnaryAsNumber(@operator, lhs);
-
-            if (context.IsExplain)
-            {
-                PrintAsBitSet((int)long.Parse(lhs.Value));
-            }
-
             return new EvaluatorState() { IsSigned = true, Type = lhs.Type, Value = result.ToString() };
         }
 
@@ -965,15 +947,10 @@ namespace Shiny.Calculator.Evaluation
             printer.Print(new Run() { Text = $"\"{value}\"", Color = XConsole.ForegroundColor });
         }
 
-        private void PrintAsBitSet(int value, int maxOffset = 5)
+        private void PrintAsBitSet(int value, int maxOffset = 6)
         {
             var val = value.ToString();
             int len = val.Length;
-
-            if (value < 0)
-            {
-                len--;
-            }
 
             List<Run> runs = new List<Run>();
 
