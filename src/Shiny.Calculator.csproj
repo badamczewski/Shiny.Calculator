@@ -20,4 +20,28 @@
     <PackageReference Include="ObjectLayoutInspector" Version="0.1.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Tests\007_variable_assign_and_reassign.calc">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Tests\006_variable_assign_compute.calc">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Tests\005_variables.calc">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Tests\004_blocks.calc">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Tests\003_add_sub_mul_div_expression.calc">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Tests\002_mul_div_expression.calc">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Tests\001_add_sub_expression.calc">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

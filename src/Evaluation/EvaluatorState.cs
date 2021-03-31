@@ -22,6 +22,6 @@ namespace Shiny.Calculator.Evaluation
 
     public class ErrorState : EvaluatorState
     {
-        
+        public string Message;
     }
 }

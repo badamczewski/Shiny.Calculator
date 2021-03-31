@@ -7,11 +7,21 @@ using System.Text;
 
 namespace Shiny.Calculator.Parsing
 {
+
     public class Parser
     {
+        [Flags]
+        public enum ParsingMode : byte
+        {
+            None = 0,
+            Separator = 2,
+            Block = 4,
+            Parren = 8,
+            Indexing = 16
+        }
+
         private List<AST_Error> errors = null;
         private List<Token> tokens;
-        private bool isBlock = false;
         private string[] commands;
         private string[] instructions;
         private string[] operators;
@@ -52,7 +62,7 @@ namespace Shiny.Calculator.Parsing
             }
         }
 
-        public AST_Node ParseStatement(ref int index)
+        public AST_Node ParseStatement(ref int index, ParsingMode mode = ParsingMode.None)
         {
             if (IsCommand(index))
             {
@@ -64,26 +74,25 @@ namespace Shiny.Calculator.Parsing
             }
             else if (IsVariableAssigmnent(index))
             {
-                return ParseVariableAssigment(ref index);
+                return ParseVariableAssigment(ref index, mode);
             }
             else if (IsFunctionCall(index))
             {
-                return ParseFunctionCall(ref index);
+                return ParseFunctionCall(ref index, mode);
             }
             else if (IsLiteralsOrVars(index) || IsOpenBracket(index) || IsParrenWithOperator(index))
             {
-                return ParseBinaryExpression(ref index, 0);
+                return ParseBinaryExpression(ref index, 0, mode);
             }
             else if (IsOpenBlock(index))
             {
                 return ParseBlock(ref index);
             }
             
-
             return ParsingError("Unknown statement", index);
         }
 
-        private AST_Node ParseFunctionCall(ref int index)
+        private AST_Node ParseFunctionCall(ref int index, ParsingMode mode = ParsingMode.None)
         {
             //
             // Get function Name.  
@@ -93,14 +102,15 @@ namespace Shiny.Calculator.Parsing
             //
             // Parse Arguments, parse until (')'), each itteration requires a sepearator (',')
             //
-            Move(ref index);
-            
+            Move(ref index); // (
+            Move(ref index); // arg1
+
             List<AST_Node> arguments = new List<AST_Node>();
             while (IsCloseBracket(index) == false)
             {
                 if (IsLiteralsOrVarsOrIndexing(index))
                 {
-                    var arg = ParseBinaryExpression(ref index, 0, isSeparatorMode: true);
+                    var arg = ParseBinaryExpression(ref index, 0, ParsingMode.Separator | mode);
                     arguments.Add(arg);      
                     
                     if(IsComma(index))
@@ -129,7 +139,7 @@ namespace Shiny.Calculator.Parsing
             return functionCall;
         }
 
-        private AST_Node ParseVariableAssigment(ref int index)
+        private AST_Node ParseVariableAssigment(ref int index, ParsingMode mode = ParsingMode.None)
         {
             //
             // Create the identifier.
@@ -169,7 +179,7 @@ namespace Shiny.Calculator.Parsing
             }
             else
             {
-                var assigment = ParseBinaryExpression(ref index, 0);
+                var assigment = ParseBinaryExpression(ref index, 0, mode);
                 return new VariableAssigmentExpression()
                 {
                     Identifier = variable,
@@ -181,7 +191,7 @@ namespace Shiny.Calculator.Parsing
         private AST_Node ParseBlock(ref int index)
         {
             Move(ref index);
-            isBlock = true;
+
 
             List<AST_Node> nodes = new List<AST_Node>();
 
@@ -193,12 +203,10 @@ namespace Shiny.Calculator.Parsing
                 if (IsEndOfStatement(index)) continue;
                 if (IsCloseBlock(index)) { break; }
 
-                var stmt = ParseStatement(ref index);
+                var stmt = ParseStatement(ref index, mode: ParsingMode.Block);
                 nodes.Add(stmt);
 
             }
-
-            isBlock = false;
 
             return new BlockExpression() { Body = nodes };
         }
@@ -298,7 +306,7 @@ namespace Shiny.Calculator.Parsing
             {
                 IndexingExpression indexing = new IndexingExpression()
                 {
-                    Expression = ParseBinaryExpression(ref index, 0, true)
+                    Expression = ParseBinaryExpression(ref index, 0, ParsingMode.Separator)
                 };
                 return indexing;
             }
@@ -412,7 +420,8 @@ namespace Shiny.Calculator.Parsing
         //   exp = (l = prev_exp, r = 8)
         //
         #endregion
-        private AST_Node ParseBinaryExpression(ref int index, int level, bool isSeparatorMode = false)
+
+        private AST_Node ParseBinaryExpression(ref int index, ref bool isEnd, int level, ParsingMode mode = ParsingMode.None)
         {
             AST_Node left = null;
 
@@ -450,7 +459,6 @@ namespace Shiny.Calculator.Parsing
                 else if (IsOperator(index))
                 {
                     var @operator = (OperatorToken)token;
-
                     var isValid = ValidateBinaryExpressionOperator(@operator, index);
 
                     // 
@@ -460,8 +468,10 @@ namespace Shiny.Calculator.Parsing
                     if (@operator.Level > level)
                     {
                         Move(ref index);
-                        var right = ParseBinaryExpression(ref index, @operator.Level, isSeparatorMode);
+                        var right = ParseBinaryExpression(ref index, ref isEnd, @operator.Level, mode);
                         left = new BinaryExpression() { Left = left, Operator = @operator.GetValue(), Right = right };
+
+                        if (isEnd) return left;
                     }
                     else
                     {
@@ -477,24 +487,26 @@ namespace Shiny.Calculator.Parsing
 
                 //
                 // @IDEA:
-                // Indexing Access has sense in assembly simulation
-                // Perhaps we should pass it as an argument to recursive descent.
+                // Indexing Access is used in assembly instructions
+                // Perhaps we should pass it as a mode argument to recursive descent.
                 //
                 else if (IsIndexingAccessOpen(index))
                 {
                     Move(ref index);
-                    return ParseBinaryExpression(ref index, 0, isSeparatorMode);
+                    return ParseBinaryExpression(ref index, 0, mode);
+
                 }
-                else if (IsIndexingAccessClose(index))
+                else if (mode.HasFlag(ParsingMode.Indexing) && IsIndexingAccessClose(index))
                 {
+                    isEnd = true;
                     return left;
                 }
-                //
                 // For Assembly index addressing we need to 
                 // exit when we encouter a comma.
                 //
-                else if (IsComma(index) && isSeparatorMode)
+                else if (mode.HasFlag(ParsingMode.Separator) && IsComma(index))
                 {
+                    isEnd = true;
                     return left;
                 }
                 else if (IsOpenBracket(index))
@@ -513,12 +525,14 @@ namespace Shiny.Calculator.Parsing
                 //
                 // IF we are parsing a block we need to check for block temrination
                 //
-                else if (isBlock && IsCloseBlock(index))
+                else if (mode.HasFlag(ParsingMode.Block) && IsCloseBlock(index))
                 {
+                    isEnd = true;
                     return left;
                 }
-                else if (isBlock && IsEndOfStatement(index))
+                else if (mode.HasFlag(ParsingMode.Block) && IsEndOfStatement(index))
                 {
+                    isEnd = true;
                     return left;
                 }
                 else
@@ -528,6 +542,12 @@ namespace Shiny.Calculator.Parsing
             }
 
             return left;
+        }
+
+        private AST_Node ParseBinaryExpression(ref int index, int level, ParsingMode mode = ParsingMode.None)
+        {
+            bool end = false;
+            return ParseBinaryExpression(ref index, ref end, level, mode);
         }
 
         private bool ValidateBinaryExpressionOperator(OperatorToken @operator, int index)
@@ -743,12 +763,12 @@ namespace Shiny.Calculator.Parsing
 
         private bool IsIndexingAccessOpen(int tokenIndex)
         {
-            return Match(tokenIndex, TokenKind.BracketOpen);
+            return Match(tokenIndex, (TokenKind.BracketOpen, "["));
         }
 
         private bool IsIndexingAccessClose(int tokenIndex)
         {
-            return Match(tokenIndex, TokenKind.BracketClose);
+            return Match(tokenIndex, (TokenKind.BracketClose, "]"));
         }
 
         private bool IsVariableAssigmnent(int tokenIndex)

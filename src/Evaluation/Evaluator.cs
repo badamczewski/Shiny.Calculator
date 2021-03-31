@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Shiny.Calculator.Evaluation;
-
 using BinaryExpression = Shiny.Calculator.Parsing.BinaryExpression;
 using AST_Node = Shiny.Calculator.Parsing.AST_Node;
 using UnaryExpression = Shiny.Calculator.Parsing.UnaryExpression;
@@ -238,6 +237,9 @@ namespace Shiny.Calculator.Evaluation
                         printer.PrintInline(
                             Run.White(variable.Key + new string(' ', Math.Abs(maxVarName - variable.Key.Length)) + " :"));
 
+                        if (variable.Value.Value == null)
+                            printer.Print(Run.Yellow("<NA>"));
+
                         switch (variable.Value.Type)
                         {
                             case LiteralType.Number:
@@ -288,11 +290,12 @@ namespace Shiny.Calculator.Evaluation
                         //Error.
                         if(a.Value != b.Value)
                         {
-                            Error($"Assertion failed for \"{a.Value}\" and \"{b.Value}\"", functionCall);
+                            return Error($"Assertion failed for \"{a.Value}\" and \"{b.Value}\"", functionCall);
                         }
                         
                         break;
                     }
+                
             }
 
             return EvaluatorState.Empty();
@@ -320,15 +323,40 @@ namespace Shiny.Calculator.Evaluation
         }
 
         private EvaluatorState EvaluateBlock(BlockExpression block)
-        {            
+        {
+            // If this is an anonymous block we need to create a local env, 
+            // but first we need to check if it is.
+            var envCopy = this.enviroment;
+            if (enviroment.OwnerID != block.ID)
+            {
+                // Not ours, create a new local.
+                var localEnv = new Enviroment()
+                {
+                    OwnerID = block.ID,
+                    Labels = block.LabelToAddressMap
+                };
+                this.enviroment = localEnv;
+            }
+
             enviroment.StatementIndex = 0;
             //
             // A block needs it's own program counter
             //
-            for(; enviroment.StatementIndex < block.Body.Count; enviroment.StatementIndex++)
+            for (; enviroment.StatementIndex < block.Body.Count; enviroment.StatementIndex++)
             {
                 var stmt = block.Body[enviroment.StatementIndex];
-                Visit(stmt);
+                var result = Visit(stmt);
+
+                if (result is ErrorState)
+                    return result;
+            }
+
+            //
+            // Restore env if we switched it.
+            //
+            if (enviroment.OwnerID != block.ID)
+            {
+                this.enviroment = envCopy;
             }
 
             return new EvaluatorState();
@@ -358,30 +386,25 @@ namespace Shiny.Calculator.Evaluation
 
         private EvaluatorState EvaluateBlockAssigmentExpression(string identifier, BlockExpression blockExpression)
         {
-            if (enviroment.Variables.TryGetValue(identifier, out var state))
+            var state = new BlockState()
             {
-                state = new BlockState() {
-                    Type = LiteralType.Block,
-                    Block = blockExpression,
-                    Enviroment = new Enviroment()
-                    {
-                        Labels = blockExpression.LabelToAddressMap
-                    }
-                };
+                Type = LiteralType.Block,
+                Block = blockExpression,
+                
+                Enviroment = new Enviroment()
+                {
+                    OwnerID = blockExpression.ID,
+                    Labels = blockExpression.LabelToAddressMap
+                }
+                
+            };
 
+            if (enviroment.Variables.TryGetValue(identifier, out _))
+            {
                 enviroment.Variables[identifier] = state;
             }
             else
             {
-                state = new BlockState() {
-                    Type = LiteralType.Block,
-                    Block = blockExpression,
-                    Enviroment = new Enviroment()
-                    {
-                        Labels = blockExpression.LabelToAddressMap
-                    }
-                };
-
                 enviroment.Variables.Add(identifier, state);
             }
 
@@ -966,10 +989,15 @@ namespace Shiny.Calculator.Evaluation
             throw new ArgumentException("Invalid Operator");
         }
 
-        private void Error(string message, AST_Node node)
+        //
+        // Simple Error Handling
+        // @TODO: This needs to be expanded, and reworked.
+        //
+        private EvaluatorState Error(string message, AST_Node node)
         {
             printer.Print();
             printer.Print(Run.Red($"{message}"));
+            return new ErrorState() { Message = message };
         }
 
         private void PrintAsBlock()

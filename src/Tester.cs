@@ -10,48 +10,59 @@ using System.Threading.Tasks;
 
 namespace Shiny.Calculator
 {
-    public class FullTest
-    {
-        private Tokenizer tokenizer = new Tokenizer();
-        private Parser parser = new Parser(Definitions.Commands, Definitions.Operators, Definitions.Instructions);
-        private Evaluator evaluator = new Evaluator();
-        private ConsolePrinter printer = new ConsolePrinter();
-
-        public bool T001_SimpleExpression()
-        {
-            //
-            // Test
-            //
-            var test = "1 + 2";
-            string expected = "3";
-
-            //
-            // Setup
-            //
-            EvaluatorContext context = new EvaluatorContext();
-            VariableAndContextResolver resolver = new VariableAndContextResolver();
-
-            var tokens = tokenizer.Tokenize(test);
-            var ast = parser.Parse(tokens);
-
-            //
-            // Expected 
-            //
-            if (resolver.Resolve(ast, printer, out var resolved))
-            {
-                var result = evaluator.Evaluate(ast, resolved, printer, context);
-                return result.Value == expected;
-            }
-
-            return false;
-        }
-    }
-
     public class Tester
     {
-        public void RunTests()
+        public void RunLanguageTests(string path)
         {
-            
+            XConsole.WriteLine("Running Language Tests:", Colors.Green);
+            int padding = 80;
+
+            foreach (var langTest in Directory.GetFiles(path))
+            {
+                XConsole.Write(" " + Path.GetFileName(langTest), Colors.White);
+
+
+                Tokenizer tokenizer = new Tokenizer();
+                Parser parser = new Parser(Definitions.Commands, Definitions.Operators, Definitions.Instructions);
+                Evaluator evaluator = new Evaluator();
+                NullPrinter printer = new NullPrinter();
+                VariableAndContextResolver variableAndContextResolver = new VariableAndContextResolver();
+
+                int pad = padding - langTest.Length;
+                if (pad <= 0) pad = 1;
+
+                XConsole.Write(new string('.', pad), Colors.White);
+
+                AST ast = null;
+                EvaluatorState result = null;
+                try
+                {
+                    var test = File.ReadAllText(langTest);
+                    var tokens = tokenizer.Tokenize(test);
+                    ast = parser.Parse(tokens);
+                    variableAndContextResolver.Resolve(ast, printer, out var resolved);
+                    result = evaluator.Evaluate(ast, resolved, printer, new EvaluatorContext());
+                }
+                catch { }
+
+                if (result == null)
+                {
+                    XConsole.WriteLine("[ERROR / EXCEPTION]", Colors.Red);
+                }
+                else if(result is ErrorState error)
+                {
+                    XConsole.WriteLine("[ERROR / EVAL]", Colors.Red);
+                }
+                else if(ast.Errors.Any())
+                {
+                    XConsole.WriteLine("[ERROR / PARSE]", Colors.Red);
+                }
+                else
+                {
+                    XConsole.WriteLine("[OK]", Colors.Green);
+                }
+
+            }
         }
     }
 

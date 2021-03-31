@@ -35,6 +35,13 @@ namespace Shiny.Calculator
         {
             IntializeConsole();
 
+            if(args.Length == 1 && args[0] == "test")
+            {
+                Tester tester = new Tester();
+                tester.RunLanguageTests("Tests");
+                return;
+            }
+
             char breakKey = '\r';
             char multiLineKey = '{';
             bool isMultiline = false;

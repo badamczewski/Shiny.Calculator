@@ -12,7 +12,7 @@ namespace Shiny.Calculator.Evaluation
     //
     public class Enviroment
     {
-        public string Name { get; set; }
+        public string OwnerID { get; set; }
 
         public Dictionary<string, EvaluatorState> Variables = new Dictionary<string, EvaluatorState>()
         {

@@ -16,8 +16,6 @@ namespace Shiny.Calculator.Evaluation
 
     public class VariableAndContextResolver
     {
-        private Enviroment enviroment = new Enviroment();
-
         private Dictionary<string, EvaluatorState> variables = new Dictionary<string, EvaluatorState>();
 
         public bool Resolve(AST syntaxTree, IPrinter printer, out ResolvedContext resolved)

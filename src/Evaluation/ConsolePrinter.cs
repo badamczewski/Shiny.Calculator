@@ -29,6 +29,23 @@ namespace Shiny.Calculator.Evaluation
             => new Run() { Text = text, Color = Colors.Yellow };
     }
 
+    public class NullPrinter : IPrinter
+    {
+        public int Indent { get => 0; set => value = 0; }
+
+        public void Clear()
+        {
+        }
+
+        public void Print(params Run[] runs)
+        {
+        }
+
+        public void PrintInline(params Run[] runs)
+        {
+        }
+    }
+
     public class ConsolePrinter : IPrinter
     {
         public void Clear()
