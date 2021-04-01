@@ -1,6 +1,6 @@
 # Shiny Calculator
 
-![anim1](https://user-images.githubusercontent.com/752380/113292334-a900a780-92f4-11eb-8c05-58876ac2648c.gif)
+![anim2](https://user-images.githubusercontent.com/752380/113320774-318e4080-9313-11eb-8436-394f67c507e4.gif)
 
 A REPL calculator that helps developers with everyday tasks that require different types of calculations. 
 
@@ -15,6 +15,7 @@ Shiny Calculator is written in C# and targets .net 5.0
 - Assembly code execution (the engine features an x86 assembly simulator)
 - Text manipulation and parsing
 - Blocks that enable the user to write programs that mix all high-level expressions with low-level assembly
+- User-friendly error messages
 - Tests and diagnostics that are integrated into the tool
 - Others
 
@@ -72,10 +73,21 @@ Displays the x86 memory
 
 Blocks allow writing programs in the calculator; a block will execute all of the commands sequentially.
 
-![obraz](https://user-images.githubusercontent.com/752380/113301594-7ad49500-92ff-11eb-979a-be31d854523c.png)
+![anim3](https://user-images.githubusercontent.com/752380/113322672-4370e300-9315-11eb-8cf1-5ce562bc398c.gif)
 
 A block starts with ```{``` and ends with ```}```. 
 Each time a start block symbol is used, the REPL will switch from single-line mode to multi-line mode. 
+
+- X86 assembly emulation
+
+You can write X86 assembly code and mix it with calulation expresions.
+
+![anim4](https://user-images.githubusercontent.com/752380/113322699-4ff53b80-9315-11eb-865d-054a2e157961.gif)
+
+- Error Messages
+
+![anim5](https://user-images.githubusercontent.com/752380/113323268-107b1f00-9316-11eb-8bb0-9114e0b94667.gif)
+
 
 ## Copyright
 
